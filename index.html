@@ -18,8 +18,8 @@
     ORG_TAGLINE:       "Your Money Made Simple When You Have A System",
     ORG_VALUES:        "Integrity · Intelligence · Impact",
     PROGRAM_NAME:      "Wealth Solutions Counselor Apprenticeship",
-    PROGRAM_RAPIDS:    "DOL Registered Apprenticeship · RAPIDS 3007HY",
-    APPROVER_EMAIL:    "cathy@globalinvestmentcompanies.com"
+    PROGRAM_RAPIDS:    "",
+    APPROVER_EMAIL:    "admin@globalinvestmentcompanies.com"
   };
 </script>
 
@@ -490,9 +490,6 @@ function LoginScreen() {
           <h1 className="font-display text-5xl font-medium leading-tight mb-6">
             Your money made simple <em className="font-medium" style={{ color: '#C8841C' }}>when you have a system.</em>
           </h1>
-          <p className="text-base leading-relaxed" style={{ color: 'rgba(255,255,255,0.7)' }}>
-            A federally registered apprenticeship preparing the next generation of Wealth Solutions Counselors. Thirty competencies. One practitioner-track curriculum. Designed for the work.
-          </p>
         </div>
 
         <div>
@@ -658,17 +655,15 @@ function LoginScreen() {
 // ============================================================
 // BRAND MARK — Globe with G
 // ============================================================
-function BrandMark({ size = 32, dark = false }) {
-  const bg = dark ? '#FFFFFF' : '#2D1FB1';
-  const fg = dark ? '#0F1631' : '#FFFFFF';
+function BrandMark({ size = 32 }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <circle cx="20" cy="20" r="19" fill={bg} stroke={dark ? '#FAF7F2' : 'none'} strokeWidth={dark ? '1' : '0'} />
-      <path d="M20 8 Q11 14 11 20 Q11 26 20 32 Q29 26 29 20 Q29 14 20 8 Z" stroke={fg} strokeWidth="1.2" fill="none" />
-      <ellipse cx="20" cy="20" rx="9" ry="3.5" stroke={fg} strokeWidth="1" fill="none" />
-      <line x1="11" y1="20" x2="29" y2="20" stroke={fg} strokeWidth="1" />
-      <text x="20" y="25.5" textAnchor="middle" fontFamily="Newsreader, Georgia, serif" fontSize="13" fontWeight="600" fill={fg}>G</text>
-    </svg>
+    <img
+      src="/gic-logo.png"
+      alt="GIC Logo"
+      width={size}
+      height={size}
+      style={{ objectFit: 'contain', borderRadius: '50%' }}
+    />
   );
 }
 
@@ -814,15 +809,11 @@ function Footer() {
               <BrandMark size={28} dark />
               <div className="font-display text-base font-semibold text-white">Global Investment Company</div>
             </div>
-            <p className="text-xs leading-relaxed">
-              A 40-year minority &amp; woman-owned investment advisory firm serving institutional and individual clients across California and beyond.
-            </p>
           </div>
           <div>
             <div className="eyebrow mb-3" style={{ color: 'rgba(255,255,255,0.4)' }}>Apprentice Program</div>
             <div className="text-xs space-y-1.5 leading-relaxed">
               <div>Wealth Solutions Counselor Track</div>
-              <div>DOL Registered Apprenticeship · RAPIDS 3007HY</div>
               <div>30 Competencies · Self-Paced + Cohort</div>
               <div>Curriculum supervision: Cathy Jackson-Gent</div>
             </div>
@@ -832,7 +823,7 @@ function Footer() {
             <div className="text-xs space-y-1.5 leading-relaxed">
               <div>300 Frank H. Ogawa Plaza, Suite 254</div>
               <div>Oakland, California 94612</div>
-              <div className="pt-2">cathy@globalinvestmentcompanies.com</div>
+              <div className="pt-2">admin@globalinvestmentcompanies.com</div>
             </div>
           </div>
         </div>
