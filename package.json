@@ -1,0 +1,17 @@
+{
+  "name": "gic-apprentice-lms",
+  "version": "0.2.0",
+  "private": true,
+  "description": "GIC Wealth Solutions Counselor Apprenticeship — Learning Management System",
+  "scripts": {
+    "start": "echo \"Static site + Netlify Functions. Deploy via Netlify.\""
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3":           "^3.658.0",
+    "@aws-sdk/s3-request-presigner":"^3.658.0",
+    "@supabase/supabase-js":        "^2.45.4"
+  }
+}

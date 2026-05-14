@@ -1,0 +1,2943 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>GIC Apprentice — Wealth Solutions Counselor Program</title>
+<meta name="description" content="Global Investment Company apprenticeship learning management system. Train Wealth Solutions Counselors across 30 DOL-aligned competencies." />
+
+<!-- ============================================================
+     CONFIGURATION — already filled in, no edits needed
+     ============================================================ -->
+<script>
+  window.GIC_CONFIG = {
+    SUPABASE_URL:      "https://selcyohawrwfmmnsvnwx.supabase.co",
+    SUPABASE_ANON_KEY: "sb_publishable_XEym2_-91a4SuWEF07BT7w_lOFHO3Pk",
+    ALLOWED_DOMAIN:    "globalinvestmentcompanies.com",
+    ORG_NAME:          "Global Investment Company",
+    ORG_TAGLINE:       "Your Money Made Simple When You Have A System",
+    ORG_VALUES:        "Integrity · Intelligence · Impact",
+    PROGRAM_NAME:      "Wealth Solutions Counselor Apprenticeship",
+    PROGRAM_RAPIDS:    "DOL Registered Apprenticeship · RAPIDS 3007HY",
+    APPROVER_EMAIL:    "cathy@globalinvestmentcompanies.com"
+  };
+</script>
+
+<!-- ============================================================
+     ESM IMPORT MAP
+     ============================================================ -->
+<script type="importmap">
+{
+  "imports": {
+    "react":                  "https://esm.sh/react@18.3.1",
+    "react-dom":              "https://esm.sh/react-dom@18.3.1",
+    "react-dom/client":       "https://esm.sh/react-dom@18.3.1/client",
+    "lucide-react":           "https://esm.sh/lucide-react@0.383.0?deps=react@18.3.1",
+    "@supabase/supabase-js":  "https://esm.sh/@supabase/supabase-js@2.45.4"
+  }
+}
+</script>
+
+<script src="https://unpkg.com/@babel/standalone@7.25.6/babel.min.js"></script>
+<script src="https://cdn.tailwindcss.com"></script>
+
+<!-- ============================================================
+     TYPOGRAPHY — Newsreader (display serif), Plus Jakarta Sans (body)
+     ============================================================ -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;0,6..72,700;1,6..72,400;1,6..72,500&family=Plus+Jakarta+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+<style>
+  :root {
+    --gic-blue:   #2D1FB1;
+    --gic-blue-2: #1A1080;
+    --gic-ink:    #0F1631;
+    --gic-bone:   #FAF7F2;
+    --gic-card:   #FFFFFF;
+    --gic-line:   #E5DFD3;
+    --gic-muted:  #6B5B4A;
+    --gic-warm:   #8A745E;
+    --gic-amber:  #C8841C;
+    --gic-green:  #1F7A4A;
+    --gic-rose:   #B83D5C;
+  }
+
+  html, body, #root { height: 100%; }
+  body {
+    background: var(--gic-bone);
+    color: var(--gic-ink);
+    font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+    font-feature-settings: 'ss01', 'cv11';
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  .font-display { font-family: 'Newsreader', Georgia, serif; font-optical-sizing: auto; }
+  .font-mono    { font-family: 'JetBrains Mono', ui-monospace, monospace; }
+
+  /* Small-caps eyebrow label — used throughout for editorial structure */
+  .eyebrow {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--gic-warm);
+  }
+
+  /* GIC card — warm white, hairline border, no shadow */
+  .gic-card {
+    background: var(--gic-card);
+    border: 1px solid var(--gic-line);
+    border-radius: 4px;
+  }
+  .gic-card-hover:hover {
+    border-color: var(--gic-blue);
+    transition: border-color 200ms ease;
+  }
+
+  /* Decorative rule with center mark — used between sections */
+  .gic-rule {
+    display: flex; align-items: center; gap: 1rem;
+    color: var(--gic-warm);
+  }
+  .gic-rule::before, .gic-rule::after {
+    content: ""; flex: 1; height: 1px;
+    background: var(--gic-line);
+  }
+
+  /* Approval status badges */
+  .badge {
+    display: inline-flex; align-items: center; gap: 0.4rem;
+    font-size: 11px; font-weight: 600; letter-spacing: 0.06em;
+    text-transform: uppercase;
+    padding: 0.25rem 0.6rem; border-radius: 2px;
+    border: 1px solid currentColor;
+  }
+  .badge-draft    { color: var(--gic-warm); }
+  .badge-pending  { color: var(--gic-amber); background: rgba(200,132,28,0.08); }
+  .badge-approved { color: var(--gic-green); background: rgba(31,122,74,0.08); }
+  .badge-ai       { color: var(--gic-rose); background: rgba(184,61,92,0.06); border-style: dashed; }
+
+  /* Buttons */
+  .btn-primary {
+    background: var(--gic-blue); color: white;
+    padding: 0.75rem 1.5rem; border-radius: 2px;
+    font-weight: 600; font-size: 14px; letter-spacing: 0.02em;
+    transition: background 150ms ease;
+  }
+  .btn-primary:hover { background: var(--gic-blue-2); }
+  .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  .btn-secondary {
+    background: transparent; color: var(--gic-ink);
+    border: 1px solid var(--gic-ink);
+    padding: 0.75rem 1.5rem; border-radius: 2px;
+    font-weight: 600; font-size: 14px; letter-spacing: 0.02em;
+    transition: all 150ms ease;
+  }
+  .btn-secondary:hover { background: var(--gic-ink); color: white; }
+
+  .btn-ghost {
+    background: transparent; color: var(--gic-muted);
+    padding: 0.5rem 1rem; border-radius: 2px;
+    font-weight: 500; font-size: 14px;
+    transition: color 150ms ease;
+  }
+  .btn-ghost:hover { color: var(--gic-ink); }
+
+  /* Inputs */
+  .gic-input {
+    background: white;
+    border: 1px solid var(--gic-line);
+    border-radius: 2px;
+    padding: 0.75rem 1rem;
+    font-size: 15px;
+    color: var(--gic-ink);
+    width: 100%;
+    transition: border-color 150ms ease;
+  }
+  .gic-input:focus {
+    outline: none;
+    border-color: var(--gic-blue);
+  }
+
+  /* Lesson content typography */
+  .prose-gic h2 { font-family: 'Newsreader', Georgia, serif; font-weight: 600; font-size: 1.875rem; color: var(--gic-ink); margin: 2.5rem 0 1rem; line-height: 1.2; }
+  .prose-gic h3 { font-family: 'Newsreader', Georgia, serif; font-weight: 600; font-size: 1.375rem; color: var(--gic-ink); margin: 2rem 0 0.75rem; line-height: 1.3; }
+  .prose-gic p  { font-size: 16px; line-height: 1.7; color: var(--gic-ink); margin-bottom: 1rem; }
+  .prose-gic ul, .prose-gic ol { margin: 0.75rem 0 1.25rem 1.5rem; }
+  .prose-gic li { font-size: 16px; line-height: 1.7; color: var(--gic-ink); margin-bottom: 0.4rem; }
+  .prose-gic ul li { list-style: none; position: relative; padding-left: 1rem; }
+  .prose-gic ul li::before { content: "—"; position: absolute; left: -0.25rem; color: var(--gic-blue); font-weight: 600; }
+  .prose-gic strong { color: var(--gic-blue); font-weight: 600; }
+  .prose-gic em { font-style: italic; color: var(--gic-muted); }
+
+  /* Custom scrollbar in modules list */
+  .gic-scroll::-webkit-scrollbar { width: 6px; }
+  .gic-scroll::-webkit-scrollbar-track { background: transparent; }
+  .gic-scroll::-webkit-scrollbar-thumb { background: var(--gic-line); border-radius: 3px; }
+  .gic-scroll::-webkit-scrollbar-thumb:hover { background: var(--gic-warm); }
+
+  /* Animations */
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+  .animate-fade-in { animation: fadeIn 400ms ease-out both; }
+
+  @keyframes pulse-soft { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+  .animate-pulse-soft { animation: pulse-soft 2s ease-in-out infinite; }
+
+  /* Quiz feedback */
+  .quiz-option {
+    border: 1px solid var(--gic-line);
+    background: white;
+    padding: 1rem 1.25rem;
+    border-radius: 2px;
+    cursor: pointer;
+    transition: all 150ms ease;
+    text-align: left;
+    width: 100%;
+  }
+  .quiz-option:hover { border-color: var(--gic-blue); }
+  .quiz-option.selected { border-color: var(--gic-blue); background: rgba(45,31,177,0.04); }
+  .quiz-option.correct { border-color: var(--gic-green); background: rgba(31,122,74,0.06); }
+  .quiz-option.incorrect { border-color: var(--gic-rose); background: rgba(184,61,92,0.06); }
+  .quiz-option:disabled { cursor: default; }
+</style>
+</head>
+<body>
+<div id="root">
+  <!-- Splash before React mounts -->
+  <div id="boot" style="height:100vh;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:1.5rem;background:#FAF7F2;">
+    <div style="width:48px;height:48px;border:2px solid #E5DFD3;border-top-color:#2D1FB1;border-radius:50%;animation:spin 800ms linear infinite;"></div>
+    <div style="font-family:'Newsreader',Georgia,serif;font-size:22px;color:#0F1631;">Global Investment Company</div>
+    <div style="font-size:12px;letter-spacing:0.18em;text-transform:uppercase;color:#8A745E;">Apprentice Program</div>
+  </div>
+  <style>@keyframes spin { to { transform: rotate(360deg); } }</style>
+</div>
+
+<script type="text/babel" data-type="module" data-presets="env,react">
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { createRoot } from 'react-dom/client';
+import { createClient } from '@supabase/supabase-js';
+import {
+  BookOpen, GraduationCap, ShieldCheck, CheckCircle2, Circle, Clock,
+  Lock, LogOut, ChevronRight, ChevronLeft, ChevronDown, User as UserIcon,
+  Award, AlertCircle, FileText, ArrowRight, ArrowLeft, Sparkles,
+  Mail, KeyRound, Eye, EyeOff, RefreshCw, X, Check, Loader2,
+  Globe, Layers, Brain, Briefcase, Target, BarChart3, Search,
+  ListChecks, MessageSquare, Bookmark, AlertTriangle,
+  Mic, Square, Send, Building2, Video, Play, Pause, Upload,
+  Plus, Edit3, Trash2, Copy, UserCheck, Users, KeySquare,
+  ClipboardCheck, RotateCcw, ExternalLink
+} from 'lucide-react';
+
+// ============================================================
+// SUPABASE CLIENT
+// ============================================================
+const CFG = window.GIC_CONFIG || {};
+const SUPABASE_READY =
+  CFG.SUPABASE_URL && !CFG.SUPABASE_URL.includes('PASTE') &&
+  CFG.SUPABASE_ANON_KEY && !CFG.SUPABASE_ANON_KEY.includes('PASTE');
+
+const supabase = SUPABASE_READY
+  ? createClient(CFG.SUPABASE_URL, CFG.SUPABASE_ANON_KEY, {
+      auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false }
+    })
+  : null;
+
+// ============================================================
+// UTILITIES
+// ============================================================
+const formatHours = (h) => h == null ? '—' : `${h}h`;
+const moduleIcon = (n) => {
+  const icons = [BookOpen, BarChart3, FileText, Layers, Brain, ShieldCheck, Target, MessageSquare, Briefcase,
+                 UserIcon, FileText, BarChart3, Award, FileText, FileText, ListChecks, MessageSquare,
+                 ShieldCheck, BarChart3, Search, Globe, FileText, ShieldCheck, BarChart3, FileText,
+                 CheckCircle2, FileText, FileText, ListChecks, ShieldCheck];
+  return icons[(n - 1) % icons.length] || BookOpen;
+};
+
+const competencyColor = (n) => {
+  if (n <= 9)  return 'core';        // CORE-1 through CORE-9
+  if (n <= 18) return 'ojl-a';       // OJL-1 through OJL-9
+  return 'ojl-b';                    // OJL-10 through OJL-21
+};
+
+const COLOR_BANDS = {
+  'core':  { label: 'Core Instruction',     accent: 'var(--gic-blue)',  pale: 'rgba(45,31,177,0.06)' },
+  'ojl-a': { label: 'On-the-Job Learning',  accent: 'var(--gic-ink)',   pale: 'rgba(15,22,49,0.05)' },
+  'ojl-b': { label: 'Advanced OJL',         accent: 'var(--gic-amber)', pale: 'rgba(200,132,28,0.06)' }
+};
+
+// ============================================================
+// API HELPER — call Netlify Functions with current session JWT
+// ============================================================
+async function callFn(name, body) {
+  const { data: { session } } = await supabase.auth.getSession();
+  const r = await fetch(`/.netlify/functions/${name}`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(session?.access_token ? { 'Authorization': 'Bearer ' + session.access_token } : {})
+    },
+    body: JSON.stringify(body || {})
+  });
+  const text = await r.text();
+  let json; try { json = JSON.parse(text); } catch { json = { raw: text }; }
+  if (!r.ok) throw new Error(json.error || text || `HTTP ${r.status}`);
+  return json;
+}
+
+async function callPublicFn(name, body) {
+  const r = await fetch(`/.netlify/functions/${name}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body || {})
+  });
+  const text = await r.text();
+  let json; try { json = JSON.parse(text); } catch { json = { raw: text }; }
+  if (!r.ok) throw new Error(json.error || text || `HTTP ${r.status}`);
+  return json;
+}
+
+const fmtRelative = (ts) => {
+  if (!ts) return '';
+  const d = new Date(ts);
+  const diff = (Date.now() - d.getTime()) / 1000;
+  if (diff < 60)    return 'just now';
+  if (diff < 3600)  return `${Math.floor(diff/60)}m ago`;
+  if (diff < 86400) return `${Math.floor(diff/3600)}h ago`;
+  if (diff < 604800)return `${Math.floor(diff/86400)}d ago`;
+  return d.toLocaleDateString();
+};
+
+// ============================================================
+// AUTH HOOK
+// ============================================================
+function useAuth() {
+  const [session, setSession]   = useState(null);
+  const [profile, setProfile]   = useState(null);
+  const [loading, setLoading]   = useState(true);
+
+  useEffect(() => {
+    if (!supabase) { setLoading(false); return; }
+    let mounted = true;
+
+    supabase.auth.getSession().then(({ data }) => {
+      if (!mounted) return;
+      setSession(data.session || null);
+      if (!data.session) setLoading(false);
+    });
+
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, sess) => {
+      if (!mounted) return;
+      setSession(sess || null);
+      if (!sess) { setProfile(null); setLoading(false); }
+    });
+
+    return () => { mounted = false; sub.subscription.unsubscribe(); };
+  }, []);
+
+  useEffect(() => {
+    if (!session) return;
+    let mounted = true;
+    (async () => {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', session.user.id)
+        .maybeSingle();
+      if (!mounted) return;
+      if (data) setProfile(data);
+      else setProfile({ id: session.user.id, email: session.user.email, role: 'apprentice', full_name: session.user.email.split('@')[0] });
+      setLoading(false);
+    })();
+    return () => { mounted = false; };
+  }, [session]);
+
+  const signOut = useCallback(async () => {
+    if (supabase) await supabase.auth.signOut();
+  }, []);
+
+  return { session, profile, loading, signOut };
+}
+
+// ============================================================
+// SETUP NEEDED SCREEN
+// ============================================================
+function SetupNeeded() {
+  return (
+    <div className="min-h-screen flex items-center justify-center p-8" style={{ background: 'var(--gic-bone)' }}>
+      <div className="max-w-xl gic-card p-12">
+        <div className="eyebrow mb-3">Configuration</div>
+        <h1 className="font-display text-3xl font-semibold mb-4">Setup required</h1>
+        <p className="text-base mb-6" style={{ color: 'var(--gic-muted)' }}>
+          The Supabase credentials need to be filled in before the platform can run. Open <code className="font-mono text-sm bg-stone-100 px-1.5 py-0.5 rounded">index.html</code> and edit the <code className="font-mono text-sm bg-stone-100 px-1.5 py-0.5 rounded">window.GIC_CONFIG</code> block near the top of the file.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================
+// LOADING FULL SCREEN
+// ============================================================
+function LoadingScreen() {
+  return (
+    <div className="min-h-screen flex items-center justify-center" style={{ background: 'var(--gic-bone)' }}>
+      <div className="flex flex-col items-center gap-4">
+        <Loader2 className="animate-spin" size={32} style={{ color: 'var(--gic-blue)' }} />
+        <div className="eyebrow">Loading</div>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================
+// LOGIN SCREEN
+// ============================================================
+function LoginScreen() {
+  const [email, setEmail]       = useState('');
+  const [password, setPassword] = useState('');
+  const [fullName, setFullName] = useState('');
+  const [token, setToken]       = useState('');
+  const [tokenPreview, setTokenPreview] = useState(null); // { valid, sponsor_name, reason }
+  const [showPw, setShowPw]     = useState(false);
+  const [mode, setMode]         = useState('signin'); // signin | reset | enroll
+  const [busy, setBusy]         = useState(false);
+  const [error, setError]       = useState('');
+  const [info, setInfo]         = useState('');
+
+  // Live token validation (debounced)
+  useEffect(() => {
+    if (mode !== 'enroll') return;
+    const t = token.trim();
+    if (t.length < 4) { setTokenPreview(null); return; }
+    const id = setTimeout(async () => {
+      try {
+        const { data, error } = await supabase.rpc('peek_token_validity', { p_token: t });
+        if (error) { setTokenPreview({ valid: false, reason: 'Could not check code.' }); return; }
+        if (data && data.length > 0) setTokenPreview(data[0]);
+      } catch (e) {
+        setTokenPreview({ valid: false, reason: 'Could not check code.' });
+      }
+    }, 400);
+    return () => clearTimeout(id);
+  }, [token, mode]);
+
+  const onSubmit = async (e) => {
+    e.preventDefault();
+    setError(''); setInfo(''); setBusy(true);
+    try {
+      if (mode === 'reset') {
+        const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+          redirectTo: window.location.origin
+        });
+        if (error) throw error;
+        setInfo('Check your inbox for a password reset link.');
+      } else if (mode === 'enroll') {
+        await callPublicFn('enroll-apprentice', {
+          token: token.trim(),
+          email: email.trim().toLowerCase(),
+          password,
+          fullName: fullName.trim()
+        });
+        // Auto sign-in
+        const { error } = await supabase.auth.signInWithPassword({
+          email: email.trim().toLowerCase(),
+          password
+        });
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.auth.signInWithPassword({
+          email:    email.trim().toLowerCase(),
+          password
+        });
+        if (error) throw error;
+      }
+    } catch (err) {
+      setError(err.message || 'Something went wrong.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="min-h-screen grid lg:grid-cols-2" style={{ background: 'var(--gic-bone)' }}>
+      {/* LEFT — Brand panel */}
+      <div className="hidden lg:flex flex-col justify-between p-16" style={{ background: 'var(--gic-ink)', color: 'white' }}>
+        <div>
+          <div className="flex items-center gap-3 mb-2">
+            <BrandMark size={36} dark />
+            <div className="font-display text-2xl font-semibold">Global Investment Company</div>
+          </div>
+          <div className="eyebrow" style={{ color: 'rgba(255,255,255,0.5)' }}>Est. 1985 · Oakland, California</div>
+        </div>
+
+        <div className="max-w-md">
+          <div className="eyebrow mb-4" style={{ color: 'rgba(255,255,255,0.5)' }}>{CFG.PROGRAM_NAME}</div>
+          <h1 className="font-display text-5xl font-medium leading-tight mb-6">
+            Your money made simple <em className="font-medium" style={{ color: '#C8841C' }}>when you have a system.</em>
+          </h1>
+          <p className="text-base leading-relaxed" style={{ color: 'rgba(255,255,255,0.7)' }}>
+            A federally registered apprenticeship preparing the next generation of Wealth Solutions Counselors. Thirty competencies. One practitioner-track curriculum. Designed for the work.
+          </p>
+        </div>
+
+        <div>
+          <div className="gic-rule mb-4" style={{ '--gic-line': 'rgba(255,255,255,0.15)' }}>
+            <span className="font-display italic text-sm" style={{ color: 'rgba(255,255,255,0.5)' }}>{CFG.ORG_VALUES}</span>
+          </div>
+          <div className="text-xs" style={{ color: 'rgba(255,255,255,0.5)' }}>{CFG.PROGRAM_RAPIDS}</div>
+        </div>
+      </div>
+
+      {/* RIGHT — Form */}
+      <div className="flex items-center justify-center p-8 lg:p-16">
+        <div className="w-full max-w-md animate-fade-in">
+          <div className="lg:hidden flex items-center gap-3 mb-10">
+            <BrandMark size={32} />
+            <div className="font-display text-xl font-semibold">Global Investment Company</div>
+          </div>
+
+          <div className="eyebrow mb-3">
+            {mode === 'reset'  ? 'Reset Password'
+             : mode === 'enroll' ? 'New Apprentice Enrollment'
+             : 'Apprentice Sign In'}
+          </div>
+          <h2 className="font-display text-3xl font-semibold mb-2">
+            {mode === 'reset'  ? 'Recover your account'
+             : mode === 'enroll' ? 'Begin your apprenticeship.'
+             : 'Welcome back.'}
+          </h2>
+          <p className="text-sm mb-8" style={{ color: 'var(--gic-muted)' }}>
+            {mode === 'reset'
+              ? "We'll email you a link to set a new password."
+              : mode === 'enroll'
+              ? 'Enter the sponsorship code provided by your employer.'
+              : 'Continue your apprenticeship. Pick up where you left off.'}
+          </p>
+
+          <form onSubmit={onSubmit} className="space-y-4">
+            {mode === 'enroll' && (
+              <>
+                <div>
+                  <label className="eyebrow block mb-2">Sponsorship code</label>
+                  <div className="relative">
+                    <KeySquare size={16} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: 'var(--gic-muted)' }} />
+                    <input
+                      type="text"
+                      className="gic-input pl-10 font-mono uppercase tracking-wider"
+                      placeholder="GIC-XXXX-XXXX"
+                      value={token}
+                      onChange={e => setToken(e.target.value.toUpperCase())}
+                      required
+                      autoComplete="off"
+                    />
+                  </div>
+                  {tokenPreview && (
+                    <div className="mt-2 text-xs flex items-center gap-1.5"
+                         style={{ color: tokenPreview.valid ? 'var(--gic-green)' : 'var(--gic-rose)' }}>
+                      {tokenPreview.valid
+                        ? <><CheckCircle2 size={12}/> Sponsored by {tokenPreview.sponsor_name}</>
+                        : <><AlertCircle size={12}/> {tokenPreview.reason}</>}
+                    </div>
+                  )}
+                </div>
+                <div>
+                  <label className="eyebrow block mb-2">Full name</label>
+                  <div className="relative">
+                    <UserIcon size={16} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: 'var(--gic-muted)' }} />
+                    <input
+                      type="text"
+                      className="gic-input pl-10"
+                      placeholder="Jane Doe"
+                      value={fullName}
+                      onChange={e => setFullName(e.target.value)}
+                      required
+                      autoComplete="name"
+                    />
+                  </div>
+                </div>
+              </>
+            )}
+
+            <div>
+              <label className="eyebrow block mb-2">Email</label>
+              <div className="relative">
+                <Mail size={16} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: 'var(--gic-muted)' }} />
+                <input
+                  type="email"
+                  className="gic-input pl-10"
+                  placeholder={mode === 'enroll' ? "you@employer.com" : "you@globalinvestmentcompanies.com"}
+                  value={email}
+                  onChange={e => setEmail(e.target.value)}
+                  required
+                  autoComplete="email"
+                />
+              </div>
+            </div>
+
+            {(mode === 'signin' || mode === 'enroll') && (
+              <div>
+                <label className="eyebrow block mb-2">{mode === 'enroll' ? 'Create a password' : 'Password'}</label>
+                <div className="relative">
+                  <KeyRound size={16} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: 'var(--gic-muted)' }} />
+                  <input
+                    type={showPw ? 'text' : 'password'}
+                    className="gic-input pl-10 pr-10"
+                    placeholder={mode === 'enroll' ? 'At least 8 characters' : '••••••••'}
+                    value={password}
+                    onChange={e => setPassword(e.target.value)}
+                    required
+                    minLength={mode === 'enroll' ? 8 : undefined}
+                    autoComplete={mode === 'enroll' ? 'new-password' : 'current-password'}
+                  />
+                  <button type="button" onClick={() => setShowPw(!showPw)} className="absolute right-3 top-1/2 -translate-y-1/2" style={{ color: 'var(--gic-muted)' }}>
+                    {showPw ? <EyeOff size={16} /> : <Eye size={16} />}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {error && (
+              <div className="text-sm p-3 border-l-2 flex items-start gap-2" style={{ borderColor: 'var(--gic-rose)', background: 'rgba(184,61,92,0.06)', color: 'var(--gic-rose)' }}>
+                <AlertCircle size={16} className="flex-shrink-0 mt-0.5" />
+                <span>{error}</span>
+              </div>
+            )}
+            {info && (
+              <div className="text-sm p-3 border-l-2 flex items-start gap-2" style={{ borderColor: 'var(--gic-green)', background: 'rgba(31,122,74,0.06)', color: 'var(--gic-green)' }}>
+                <Check size={16} className="flex-shrink-0 mt-0.5" />
+                <span>{info}</span>
+              </div>
+            )}
+
+            <button type="submit"
+                    disabled={busy || (mode === 'enroll' && tokenPreview && !tokenPreview.valid)}
+                    className="btn-primary w-full flex items-center justify-center gap-2">
+              {busy ? <Loader2 size={16} className="animate-spin" /> : null}
+              {mode === 'reset'  ? 'Send reset link'
+               : mode === 'enroll' ? 'Create account & sign in'
+               : 'Sign in'}
+              {!busy && mode === 'signin' && <ArrowRight size={16} />}
+            </button>
+
+            <div className="flex items-center justify-between pt-2 text-sm">
+              <button type="button" onClick={() => { setMode(mode === 'signin' ? 'reset' : 'signin'); setError(''); setInfo(''); }}
+                className="btn-ghost">
+                {mode === 'signin' ? 'Forgot password?' : mode === 'reset' ? 'Back to sign in' : ''}
+              </button>
+              <button type="button" onClick={() => { setMode(mode === 'enroll' ? 'signin' : 'enroll'); setError(''); setInfo(''); setTokenPreview(null); }}
+                className="btn-ghost flex items-center gap-1" style={{ color: 'var(--gic-blue)' }}>
+                {mode === 'enroll' ? 'Have an account? Sign in' : <><KeySquare size={12}/> Have a sponsorship code?</>}
+              </button>
+            </div>
+          </form>
+
+          <div className="mt-12 pt-6 border-t text-xs leading-relaxed" style={{ borderColor: 'var(--gic-line)', color: 'var(--gic-warm)' }}>
+            This platform is restricted to enrolled apprentices and Global Investment Company staff. Unauthorized access is prohibited. For account assistance contact <span style={{ color: 'var(--gic-blue)' }}>{CFG.APPROVER_EMAIL}</span>.
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================
+// BRAND MARK — Globe with G
+// ============================================================
+function BrandMark({ size = 32, dark = false }) {
+  const bg = dark ? '#FFFFFF' : '#2D1FB1';
+  const fg = dark ? '#0F1631' : '#FFFFFF';
+  return (
+    <svg width={size} height={size} viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="20" cy="20" r="19" fill={bg} stroke={dark ? '#FAF7F2' : 'none'} strokeWidth={dark ? '1' : '0'} />
+      <path d="M20 8 Q11 14 11 20 Q11 26 20 32 Q29 26 29 20 Q29 14 20 8 Z" stroke={fg} strokeWidth="1.2" fill="none" />
+      <ellipse cx="20" cy="20" rx="9" ry="3.5" stroke={fg} strokeWidth="1" fill="none" />
+      <line x1="11" y1="20" x2="29" y2="20" stroke={fg} strokeWidth="1" />
+      <text x="20" y="25.5" textAnchor="middle" fontFamily="Newsreader, Georgia, serif" fontSize="13" fontWeight="600" fill={fg}>G</text>
+    </svg>
+  );
+}
+
+// ============================================================
+// HEADER
+// ============================================================
+function Header({ profile, onSignOut, currentView, onNavigate, onOpenCoach, coachAvailable }) {
+  const [menuOpen, setMenuOpen] = useState(false);
+  const isAdmin  = profile?.role === 'admin' || profile?.role === 'approver';
+  const isMentor = profile?.role === 'mentor';
+  const initials = (profile?.full_name || profile?.email || '?').slice(0, 1).toUpperCase();
+
+  return (
+    <header className="border-b sticky top-0 z-30" style={{ borderColor: 'var(--gic-line)', background: 'rgba(250,247,242,0.92)', backdropFilter: 'blur(8px)' }}>
+      <div className="max-w-7xl mx-auto px-6 lg:px-10 py-5 flex items-center justify-between">
+        <button onClick={() => onNavigate('dashboard')} className="flex items-center gap-3 text-left">
+          <BrandMark size={32} />
+          <div>
+            <div className="font-display text-lg font-semibold leading-none">Global Investment Company</div>
+            <div className="text-[10px] tracking-[0.18em] uppercase mt-1" style={{ color: 'var(--gic-warm)' }}>Apprentice Program</div>
+          </div>
+        </button>
+
+        <nav className="hidden md:flex items-center gap-1">
+          <button onClick={() => onNavigate('dashboard')}
+                  className={`btn-ghost ${currentView === 'dashboard' ? 'text-stone-900' : ''}`}
+                  style={currentView === 'dashboard' ? { color: 'var(--gic-blue)' } : {}}>
+            My Modules
+          </button>
+          {(isMentor || isAdmin) && (
+            <button onClick={() => onNavigate('mentor')}
+                    className="btn-ghost flex items-center gap-1.5"
+                    style={currentView === 'mentor' ? { color: 'var(--gic-blue)' } : {}}>
+              <UserCheck size={14} />
+              Mentor
+            </button>
+          )}
+          {isAdmin && (
+            <>
+              <button onClick={() => onNavigate('admin')}
+                      className="btn-ghost flex items-center gap-1.5"
+                      style={currentView === 'admin' ? { color: 'var(--gic-blue)' } : {}}>
+                <ShieldCheck size={14} />
+                Admin
+              </button>
+              <button onClick={() => onNavigate('sponsors')}
+                      className="btn-ghost flex items-center gap-1.5"
+                      style={currentView === 'sponsors' ? { color: 'var(--gic-blue)' } : {}}>
+                <Building2 size={14} />
+                Sponsors
+              </button>
+            </>
+          )}
+        </nav>
+
+        <div className="flex items-center gap-2">
+          {coachAvailable && (
+            <button onClick={onOpenCoach}
+                    title="Open study coach"
+                    className="btn-ghost flex items-center gap-1.5"
+                    style={{ color: 'var(--gic-blue)' }}>
+              <Sparkles size={14} />
+              <span className="hidden sm:inline">Coach</span>
+            </button>
+          )}
+          <div className="relative">
+            <button onClick={() => setMenuOpen(!menuOpen)} className="flex items-center gap-2.5 group">
+              <div className="w-9 h-9 rounded-full flex items-center justify-center text-sm font-semibold text-white"
+                   style={{ background: 'var(--gic-blue)' }}>
+                {initials}
+              </div>
+              <ChevronDown size={14} className="hidden md:block" style={{ color: 'var(--gic-muted)' }} />
+            </button>
+
+            {menuOpen && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setMenuOpen(false)} />
+                <div className="absolute right-0 mt-2 w-72 gic-card z-50 animate-fade-in">
+                  <div className="p-4 border-b" style={{ borderColor: 'var(--gic-line)' }}>
+                    <div className="font-semibold text-sm">{profile?.full_name || profile?.email}</div>
+                    <div className="text-xs mt-0.5" style={{ color: 'var(--gic-muted)' }}>{profile?.email}</div>
+                    <div className="mt-2.5 flex items-center gap-2">
+                      <span className="badge"
+                        style={profile?.role === 'approver'
+                          ? { color: 'var(--gic-amber)', background: 'rgba(200,132,28,0.08)' }
+                          : profile?.role === 'admin'
+                          ? { color: 'var(--gic-blue)' }
+                          : profile?.role === 'mentor'
+                          ? { color: 'var(--gic-green)', background: 'rgba(31,122,74,0.08)' }
+                          : { color: 'var(--gic-muted)' }}>
+                        {profile?.role === 'approver' ? 'Curriculum Approver' :
+                         profile?.role === 'admin'    ? 'Administrator'      :
+                         profile?.role === 'mentor'   ? 'Mentor'              : 'Apprentice'}
+                      </span>
+                    </div>
+                  </div>
+                  {/* Mobile-only nav */}
+                  <div className="md:hidden border-b" style={{ borderColor: 'var(--gic-line)' }}>
+                    {(isMentor || isAdmin) && (
+                      <button onClick={() => { setMenuOpen(false); onNavigate('mentor'); }}
+                              className="w-full text-left px-4 py-2.5 hover:bg-stone-50 flex items-center gap-2 text-sm">
+                        <UserCheck size={14} /> Mentor dashboard
+                      </button>
+                    )}
+                    {isAdmin && (
+                      <>
+                        <button onClick={() => { setMenuOpen(false); onNavigate('admin'); }}
+                                className="w-full text-left px-4 py-2.5 hover:bg-stone-50 flex items-center gap-2 text-sm">
+                          <ShieldCheck size={14} /> Admin
+                        </button>
+                        <button onClick={() => { setMenuOpen(false); onNavigate('sponsors'); }}
+                                className="w-full text-left px-4 py-2.5 hover:bg-stone-50 flex items-center gap-2 text-sm">
+                          <Building2 size={14} /> Sponsors
+                        </button>
+                      </>
+                    )}
+                  </div>
+                  <button onClick={() => { setMenuOpen(false); onSignOut(); }}
+                          className="w-full text-left px-4 py-3 hover:bg-stone-50 flex items-center gap-2 text-sm">
+                    <LogOut size={14} />
+                    Sign out
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+    </header>
+  );
+}
+
+// ============================================================
+// FOOTER
+// ============================================================
+function Footer() {
+  return (
+    <footer className="border-t mt-24" style={{ borderColor: 'var(--gic-line)', background: 'var(--gic-ink)', color: 'rgba(255,255,255,0.6)' }}>
+      <div className="max-w-7xl mx-auto px-6 lg:px-10 py-12">
+        <div className="grid md:grid-cols-3 gap-8">
+          <div>
+            <div className="flex items-center gap-2 mb-3">
+              <BrandMark size={28} dark />
+              <div className="font-display text-base font-semibold text-white">Global Investment Company</div>
+            </div>
+            <p className="text-xs leading-relaxed">
+              A 40-year minority &amp; woman-owned investment advisory firm serving institutional and individual clients across California and beyond.
+            </p>
+          </div>
+          <div>
+            <div className="eyebrow mb-3" style={{ color: 'rgba(255,255,255,0.4)' }}>Apprentice Program</div>
+            <div className="text-xs space-y-1.5 leading-relaxed">
+              <div>Wealth Solutions Counselor Track</div>
+              <div>DOL Registered Apprenticeship · RAPIDS 3007HY</div>
+              <div>30 Competencies · Self-Paced + Cohort</div>
+              <div>Curriculum supervision: Cathy Jackson-Gent</div>
+            </div>
+          </div>
+          <div>
+            <div className="eyebrow mb-3" style={{ color: 'rgba(255,255,255,0.4)' }}>Contact</div>
+            <div className="text-xs space-y-1.5 leading-relaxed">
+              <div>300 Frank H. Ogawa Plaza, Suite 254</div>
+              <div>Oakland, California 94612</div>
+              <div className="pt-2">cathy@globalinvestmentcompanies.com</div>
+            </div>
+          </div>
+        </div>
+        <div className="mt-10 pt-6 border-t text-xs flex flex-wrap items-center justify-between gap-3"
+             style={{ borderColor: 'rgba(255,255,255,0.1)' }}>
+          <div>© {new Date().getFullYear()} Global Investment Company. All rights reserved.</div>
+          <div className="flex items-center gap-4" style={{ color: 'rgba(255,255,255,0.4)' }}>
+            <span>Integrity</span><span>·</span><span>Intelligence</span><span>·</span><span>Impact</span>
+          </div>
+        </div>
+      </div>
+    </footer>
+  );
+}
+
+// ============================================================
+// MODULE CARD
+// ============================================================
+function ModuleCard({ module: mod, progress, onOpen, isAdmin }) {
+  const Icon = moduleIcon(mod.module_number);
+  const band = competencyColor(mod.module_number);
+  const palette = COLOR_BANDS[band];
+
+  const status = progress?.status || 'not_started';
+  const pct = progress?.best_quiz_score || 0;
+  const isCompleted = status === 'completed';
+  const isInProgress = status === 'in_progress';
+  const isApproved = mod.status === 'approved';
+
+  return (
+    <button onClick={() => onOpen(mod)}
+            className="gic-card gic-card-hover p-6 text-left flex flex-col group transition-all animate-fade-in">
+      <div className="flex items-start justify-between mb-4">
+        <div className="w-12 h-12 rounded flex items-center justify-center"
+             style={{ background: palette.pale, color: palette.accent }}>
+          <Icon size={20} />
+        </div>
+        <div className="text-right">
+          <div className="font-mono text-xs" style={{ color: 'var(--gic-warm)' }}>
+            {String(mod.module_number).padStart(2, '0')}
+          </div>
+          {mod.competency_id && (
+            <div className="font-mono text-[10px] mt-0.5" style={{ color: 'var(--gic-warm)' }}>
+              {mod.competency_id}
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="eyebrow mb-2" style={{ color: palette.accent }}>{palette.label}</div>
+      <h3 className="font-display text-xl font-semibold leading-tight mb-2 group-hover:text-[color:var(--gic-blue)]">
+        {mod.title}
+      </h3>
+      {mod.short_description && (
+        <p className="text-sm leading-relaxed mb-4 flex-1" style={{ color: 'var(--gic-muted)' }}>
+          {mod.short_description}
+        </p>
+      )}
+
+      <div className="mt-auto pt-4 border-t flex items-center justify-between" style={{ borderColor: 'var(--gic-line)' }}>
+        <div className="flex items-center gap-3 text-xs" style={{ color: 'var(--gic-warm)' }}>
+          {mod.ri_hours > 0 && <span>{formatHours(mod.ri_hours)} RI</span>}
+          {mod.ojl_hours > 0 && <span>{formatHours(mod.ojl_hours)} OJL</span>}
+        </div>
+        <div className="flex items-center gap-2">
+          {isAdmin && mod.status !== 'approved' && (
+            <span className="badge badge-ai">
+              <Sparkles size={10} />Awaiting Review
+            </span>
+          )}
+          {isCompleted && <CheckCircle2 size={18} style={{ color: 'var(--gic-green)' }} />}
+          {isInProgress && !isCompleted && (
+            <span className="text-xs font-semibold" style={{ color: 'var(--gic-blue)' }}>
+              {pct ? `${pct}%` : 'In progress'}
+            </span>
+          )}
+          {!isCompleted && !isInProgress && !isApproved && (
+            <Lock size={14} style={{ color: 'var(--gic-warm)' }} />
+          )}
+        </div>
+      </div>
+    </button>
+  );
+}
+
+// ============================================================
+// APPRENTICE DASHBOARD
+// ============================================================
+function ApprenticeDashboard({ modules, progress, profile, onOpenModule }) {
+  const isAdmin = profile?.role === 'admin' || profile?.role === 'approver';
+
+  // Group modules by competency band
+  const core    = modules.filter(m => m.module_number <= 9);
+  const ojlA    = modules.filter(m => m.module_number > 9 && m.module_number <= 18);
+  const ojlB    = modules.filter(m => m.module_number > 18);
+
+  const progressBy = useMemo(() => {
+    const map = {};
+    progress.forEach(p => { map[p.module_id] = p; });
+    return map;
+  }, [progress]);
+
+  const totalCompleted = progress.filter(p => p.status === 'completed').length;
+  const totalInProgress = progress.filter(p => p.status === 'in_progress').length;
+
+  const visibleModules = isAdmin ? modules : modules.filter(m => m.status === 'approved');
+
+  return (
+    <main className="max-w-7xl mx-auto px-6 lg:px-10 py-12 lg:py-16 animate-fade-in">
+      {/* Welcome hero */}
+      <section className="mb-16">
+        <div className="eyebrow mb-3">Welcome, {(profile?.full_name || profile?.email || '').split('@')[0]}</div>
+        <h1 className="font-display text-4xl lg:text-6xl font-medium leading-tight mb-6 max-w-3xl">
+          The work of an advisor begins with <em>understanding.</em>
+        </h1>
+        <p className="text-lg leading-relaxed max-w-2xl" style={{ color: 'var(--gic-muted)' }}>
+          Your apprenticeship is structured around thirty competencies — drawn from our DOL-registered work process. Move through them at your pace; some live in the classroom, others on the job.
+        </p>
+      </section>
+
+      {/* Stats strip */}
+      <section className="grid grid-cols-2 lg:grid-cols-4 gap-px mb-16 border" style={{ borderColor: 'var(--gic-line)', background: 'var(--gic-line)' }}>
+        <Stat label="Modules Completed" value={totalCompleted} max={visibleModules.length} />
+        <Stat label="In Progress" value={totalInProgress} />
+        <Stat label="Core Competencies" value={`${core.filter(m => m.status === 'approved').length}/${core.length}`} />
+        <Stat label="Avg. Quiz Score" value={
+          progress.filter(p => p.best_quiz_score).length
+            ? Math.round(progress.filter(p => p.best_quiz_score).reduce((a, p) => a + p.best_quiz_score, 0) / progress.filter(p => p.best_quiz_score).length) + '%'
+            : '—'
+        } />
+      </section>
+
+      {/* Module sections */}
+      <ModuleSection
+        eyebrow="Core Instruction · 144 Related Instruction Hours"
+        title="Foundations"
+        subtitle="The shared body of knowledge every Wealth Solutions Counselor draws from."
+        modules={core.filter(m => isAdmin || m.status === 'approved')}
+        progressBy={progressBy}
+        onOpen={onOpenModule}
+        isAdmin={isAdmin}
+      />
+
+      <ModuleSection
+        eyebrow="On-the-Job Learning · Client-Facing"
+        title="Working with Clients"
+        subtitle="Discovery, documents, planning, and the practitioner skills that turn knowledge into service."
+        modules={ojlA.filter(m => isAdmin || m.status === 'approved')}
+        progressBy={progressBy}
+        onOpen={onOpenModule}
+        isAdmin={isAdmin}
+      />
+
+      <ModuleSection
+        eyebrow="On-the-Job Learning · Operations &amp; Investment"
+        title="Investment, Compliance &amp; Operations"
+        subtitle="The technical work that supports a firm: research, reporting, reconciliation, and audit-readiness."
+        modules={ojlB.filter(m => isAdmin || m.status === 'approved')}
+        progressBy={progressBy}
+        onOpen={onOpenModule}
+        isAdmin={isAdmin}
+      />
+
+      {/* Curriculum-in-development notice */}
+      {!isAdmin && modules.filter(m => m.status !== 'approved').length > 0 && (
+        <section className="mt-12 gic-card p-8 max-w-3xl">
+          <div className="flex items-start gap-4">
+            <Clock size={20} style={{ color: 'var(--gic-amber)' }} className="flex-shrink-0 mt-1" />
+            <div>
+              <div className="font-display text-xl font-semibold mb-2">More modules unlock as they're approved</div>
+              <p className="text-sm leading-relaxed" style={{ color: 'var(--gic-muted)' }}>
+                {modules.filter(m => m.status !== 'approved').length} additional competencies are currently in curriculum development, undergoing review by Cathy Jackson-Gent, our Related Supplemental Instruction Provider. You'll see them appear here as they're approved for instruction.
+              </p>
+            </div>
+          </div>
+        </section>
+      )}
+    </main>
+  );
+}
+
+function Stat({ label, value, max }) {
+  return (
+    <div className="bg-white p-6">
+      <div className="eyebrow mb-2">{label}</div>
+      <div className="font-display text-3xl font-semibold">
+        {value}
+        {max != null && <span className="text-base ml-1" style={{ color: 'var(--gic-warm)' }}>/ {max}</span>}
+      </div>
+    </div>
+  );
+}
+
+function ModuleSection({ eyebrow, title, subtitle, modules, progressBy, onOpen, isAdmin }) {
+  if (!modules.length) return null;
+  return (
+    <section className="mb-20">
+      <div className="mb-8 max-w-2xl">
+        <div className="eyebrow mb-2">{eyebrow}</div>
+        <h2 className="font-display text-3xl font-semibold mb-3" dangerouslySetInnerHTML={{ __html: title }} />
+        <p className="text-base leading-relaxed" style={{ color: 'var(--gic-muted)' }}>{subtitle}</p>
+      </div>
+      <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-5">
+        {modules.map(m => (
+          <ModuleCard
+            key={m.id}
+            module={m}
+            progress={progressBy[m.id]}
+            onOpen={onOpen}
+            isAdmin={isAdmin}
+          />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+// ============================================================
+// MODULE VIEW — Lessons + Quiz + Completion
+// ============================================================
+function ModuleView({ module: mod, progress, profile, onBack, onProgressUpdate, submissions, onOpenRecorder, onViewSubmission }) {
+  const [view, setView]               = useState('overview'); // overview | lesson | quiz | results
+  const [currentLesson, setCurrentLesson] = useState(progress?.current_lesson || 0);
+  const [completedLessons, setCompletedLessons] = useState(progress?.lessons_completed || []);
+  const isAdmin = profile?.role === 'admin' || profile?.role === 'approver';
+  const isApproved = mod.status === 'approved';
+  const content = mod.content || {};
+  const lessons = content.lessons || [];
+  const quiz = content.quiz || null;
+  const hasContent = lessons.length > 0;
+
+  const markLessonComplete = async (idx) => {
+    const next = Array.from(new Set([...completedLessons, idx]));
+    setCompletedLessons(next);
+    await onProgressUpdate(mod.id, {
+      status: 'in_progress',
+      current_lesson: idx,
+      lessons_completed: next
+    });
+  };
+
+  if (!hasContent) {
+    return (
+      <main className="max-w-4xl mx-auto px-6 lg:px-10 py-12 animate-fade-in">
+        <button onClick={onBack} className="btn-ghost flex items-center gap-1.5 mb-8">
+          <ArrowLeft size={14} /> All modules
+        </button>
+
+        <div className="eyebrow mb-3">{mod.competency_id} · Module {String(mod.module_number).padStart(2, '0')}</div>
+        <h1 className="font-display text-4xl font-semibold mb-4">{mod.title}</h1>
+        <p className="text-lg leading-relaxed mb-8" style={{ color: 'var(--gic-muted)' }}>
+          {mod.short_description}
+        </p>
+
+        <div className="gic-card p-10 text-center">
+          <Clock size={28} style={{ color: 'var(--gic-amber)' }} className="mx-auto mb-4" />
+          <div className="font-display text-2xl font-semibold mb-2">Curriculum in development</div>
+          <p className="text-sm leading-relaxed max-w-md mx-auto" style={{ color: 'var(--gic-muted)' }}>
+            This module is currently being authored. It will be reviewed and approved by Cathy Jackson-Gent before being made available to apprentices.
+          </p>
+        </div>
+      </main>
+    );
+  }
+
+  // OVERVIEW SCREEN
+  if (view === 'overview') {
+    const completedCount = completedLessons.length;
+    const allLessonsComplete = lessons.length > 0 && completedCount >= lessons.length;
+    return (
+      <main className="max-w-5xl mx-auto px-6 lg:px-10 py-12 animate-fade-in">
+        <button onClick={onBack} className="btn-ghost flex items-center gap-1.5 mb-8">
+          <ArrowLeft size={14} /> All modules
+        </button>
+
+        {isAdmin && !isApproved && (
+          <div className="mb-6 p-4 border-l-2 flex items-start gap-3"
+               style={{ borderColor: 'var(--gic-rose)', background: 'rgba(184,61,92,0.04)' }}>
+            <Sparkles size={16} style={{ color: 'var(--gic-rose)' }} className="flex-shrink-0 mt-0.5" />
+            <div className="text-sm">
+              <strong style={{ color: 'var(--gic-rose)' }}>Drafted for review.</strong>
+              <span style={{ color: 'var(--gic-ink)' }}> This module's content is in draft and requires approval by a licensed fiduciary expert at Global Investment Company before publication to apprentices.</span>
+            </div>
+          </div>
+        )}
+
+        <div className="eyebrow mb-3">{mod.competency_id} · Module {String(mod.module_number).padStart(2, '0')}</div>
+        <h1 className="font-display text-4xl lg:text-5xl font-semibold leading-tight mb-4">{mod.title}</h1>
+        <p className="text-lg leading-relaxed max-w-3xl mb-8" style={{ color: 'var(--gic-muted)' }}>
+          {mod.short_description}
+        </p>
+
+        <div className="grid lg:grid-cols-3 gap-8 mb-10">
+          <div className="lg:col-span-2 gic-card p-8">
+            <div className="eyebrow mb-3">Learning Objectives</div>
+            <p className="text-sm mb-4" style={{ color: 'var(--gic-muted)' }}>By the end of this module, you will be able to:</p>
+            <ul className="space-y-3">
+              {(mod.learning_objectives || []).map((obj, i) => (
+                <li key={i} className="flex items-start gap-3 text-sm leading-relaxed">
+                  <div className="font-mono text-xs flex-shrink-0 mt-0.5 w-6" style={{ color: 'var(--gic-blue)' }}>
+                    {String(i + 1).padStart(2, '0')}
+                  </div>
+                  <span>{obj}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          <div className="gic-card p-8">
+            <div className="eyebrow mb-3">At a Glance</div>
+            <div className="space-y-4 text-sm">
+              <div>
+                <div style={{ color: 'var(--gic-warm)' }}>Lessons</div>
+                <div className="font-display text-2xl font-semibold">{lessons.length}</div>
+              </div>
+              {quiz && (
+                <div>
+                  <div style={{ color: 'var(--gic-warm)' }}>Assessment</div>
+                  <div className="font-display text-2xl font-semibold">{quiz.questions?.length || 0}<span className="text-sm ml-1" style={{ color: 'var(--gic-warm)' }}>questions</span></div>
+                  <div className="text-xs mt-1" style={{ color: 'var(--gic-muted)' }}>Pass threshold: {quiz.passing_score || 80}%</div>
+                </div>
+              )}
+              {mod.ri_hours > 0 && (
+                <div>
+                  <div style={{ color: 'var(--gic-warm)' }}>RI Hours</div>
+                  <div className="font-display text-2xl font-semibold">{mod.ri_hours}h</div>
+                </div>
+              )}
+              {mod.ojl_hours > 0 && (
+                <div>
+                  <div style={{ color: 'var(--gic-warm)' }}>OJL Hours</div>
+                  <div className="font-display text-2xl font-semibold">{mod.ojl_hours}h</div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Lesson list */}
+        <div className="mb-10">
+          <div className="eyebrow mb-4">Lessons</div>
+          <div className="gic-card divide-y" style={{ borderColor: 'var(--gic-line)' }}>
+            {lessons.map((lesson, idx) => {
+              const done = completedLessons.includes(idx);
+              return (
+                <button key={idx}
+                  onClick={() => { setCurrentLesson(idx); setView('lesson'); }}
+                  className="w-full p-5 text-left flex items-center gap-4 hover:bg-stone-50 transition-colors">
+                  <div className="font-mono text-xs w-8" style={{ color: 'var(--gic-warm)' }}>
+                    {String(idx + 1).padStart(2, '0')}
+                  </div>
+                  <div className="flex-1">
+                    <div className="font-display text-lg font-semibold">{lesson.title}</div>
+                    {lesson.summary && (
+                      <div className="text-sm mt-0.5" style={{ color: 'var(--gic-muted)' }}>{lesson.summary}</div>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-3">
+                    {lesson.read_time && (
+                      <span className="text-xs" style={{ color: 'var(--gic-warm)' }}>{lesson.read_time}</span>
+                    )}
+                    {done ? (
+                      <CheckCircle2 size={18} style={{ color: 'var(--gic-green)' }} />
+                    ) : (
+                      <Circle size={18} style={{ color: 'var(--gic-line)' }} />
+                    )}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Module-end assessment */}
+        {quiz && (
+          <div className="gic-card p-8 flex items-center justify-between">
+            <div>
+              <div className="eyebrow mb-2">Module Assessment</div>
+              <div className="font-display text-2xl font-semibold mb-1">Demonstrate competency</div>
+              <div className="text-sm" style={{ color: 'var(--gic-muted)' }}>
+                Complete all lessons first, then take the assessment to mark this module complete.
+              </div>
+            </div>
+            <button
+              onClick={() => setView('quiz')}
+              disabled={!allLessonsComplete}
+              className="btn-primary flex items-center gap-2">
+              {progress?.best_quiz_score ? 'Retake' : 'Start'} assessment
+              <ArrowRight size={16} />
+            </button>
+          </div>
+        )}
+
+        {/* OJL submissions — only for modules with on-the-job-learning hours */}
+        {(mod.ojl_hours || 0) > 0 && profile?.role === 'apprentice' && (
+          <div className="gic-card p-8 mt-6">
+            <div className="flex items-start justify-between mb-5">
+              <div>
+                <div className="eyebrow mb-2 flex items-center gap-1.5">
+                  <Video size={11} /> On-the-Job Demonstration
+                </div>
+                <div className="font-display text-2xl font-semibold mb-1">Record competency in practice</div>
+                <div className="text-sm leading-relaxed" style={{ color: 'var(--gic-muted)' }}>
+                  This module requires {mod.ojl_hours} hour{mod.ojl_hours === 1 ? '' : 's'} of demonstrated practice.
+                  Record a video showing the competency, add context, and submit for mentor review.
+                </div>
+              </div>
+              <button onClick={() => onOpenRecorder(mod)} className="btn-primary flex items-center gap-2">
+                <Mic size={14} /> Record submission
+              </button>
+            </div>
+
+            {submissions && submissions.length > 0 && (
+              <div className="border-t pt-5" style={{ borderColor: 'var(--gic-line)' }}>
+                <div className="eyebrow mb-3">Your submissions</div>
+                <div className="space-y-2">
+                  {submissions.map(s => (
+                    <button key={s.id}
+                            onClick={() => onViewSubmission(s)}
+                            className="w-full text-left flex items-center justify-between p-3 rounded-lg hover:bg-stone-50 border"
+                            style={{ borderColor: 'var(--gic-line)' }}>
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-lg flex items-center justify-center"
+                             style={{
+                               background: s.status === 'approved' ? 'rgba(31,122,74,0.08)'
+                                         : s.status === 'needs_revision' ? 'rgba(184,61,92,0.08)'
+                                         : 'rgba(45,31,177,0.06)',
+                               color: s.status === 'approved' ? 'var(--gic-green)'
+                                    : s.status === 'needs_revision' ? 'var(--gic-rose)'
+                                    : 'var(--gic-blue)'
+                             }}>
+                          {s.status === 'approved' ? <CheckCircle2 size={16}/>
+                           : s.status === 'needs_revision' ? <RotateCcw size={16}/>
+                           : <Clock size={16}/>}
+                        </div>
+                        <div>
+                          <div className="font-medium text-sm">
+                            {s.status === 'approved' ? 'Approved' :
+                             s.status === 'needs_revision' ? 'Needs revision' :
+                             s.status === 'under_review' ? 'Under review' : 'Submitted'}
+                          </div>
+                          <div className="text-xs" style={{ color: 'var(--gic-muted)' }}>
+                            {fmtRelative(s.submitted_at)}{s.ojl_hours_credited ? ` · ${s.ojl_hours_credited}h credited` : ''}
+                          </div>
+                        </div>
+                      </div>
+                      <ChevronRight size={16} style={{ color: 'var(--gic-warm)' }} />
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Approval footer for approved modules */}
+        {isApproved && (
+          <div className="mt-12 pt-6 border-t text-xs flex items-center gap-2" style={{ borderColor: 'var(--gic-line)', color: 'var(--gic-warm)' }}>
+            <ShieldCheck size={14} />
+            Reviewed and approved by {mod.approved_by_email === 'cathy@globalinvestmentcompanies.com' ? 'Cathy Jackson-Gent' : mod.approved_by_email}, Global Investment Company.
+          </div>
+        )}
+      </main>
+    );
+  }
+
+  // LESSON SCREEN
+  if (view === 'lesson') {
+    const lesson = lessons[currentLesson];
+    if (!lesson) return null;
+
+    return (
+      <main className="max-w-3xl mx-auto px-6 lg:px-10 py-12 animate-fade-in">
+        <button onClick={() => setView('overview')} className="btn-ghost flex items-center gap-1.5 mb-8">
+          <ArrowLeft size={14} /> Module overview
+        </button>
+
+        <div className="mb-2 flex items-center gap-3">
+          <div className="eyebrow">Lesson {String(currentLesson + 1).padStart(2, '0')} of {lessons.length}</div>
+          {lesson.read_time && <span className="text-xs" style={{ color: 'var(--gic-warm)' }}>· {lesson.read_time}</span>}
+        </div>
+        <h1 className="font-display text-4xl font-semibold leading-tight mb-8">{lesson.title}</h1>
+
+        <div className="prose-gic">
+          {(lesson.blocks || []).map((block, i) => <LessonBlock key={i} block={block} />)}
+        </div>
+
+        {/* Nav */}
+        <div className="mt-16 pt-8 border-t flex items-center justify-between" style={{ borderColor: 'var(--gic-line)' }}>
+          <button
+            onClick={() => setCurrentLesson(Math.max(0, currentLesson - 1))}
+            disabled={currentLesson === 0}
+            className="btn-ghost flex items-center gap-1.5 disabled:opacity-30">
+            <ArrowLeft size={14} /> Previous
+          </button>
+
+          <button
+            onClick={async () => {
+              await markLessonComplete(currentLesson);
+              if (currentLesson < lessons.length - 1) {
+                setCurrentLesson(currentLesson + 1);
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+              } else {
+                setView('overview');
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+              }
+            }}
+            className="btn-primary flex items-center gap-2">
+            {currentLesson < lessons.length - 1 ? 'Mark complete & next' : 'Mark complete'}
+            <ArrowRight size={16} />
+          </button>
+        </div>
+      </main>
+    );
+  }
+
+  // QUIZ SCREEN
+  if (view === 'quiz' && quiz) {
+    return <QuizRunner
+      mod={mod}
+      quiz={quiz}
+      profile={profile}
+      onClose={() => setView('overview')}
+      onComplete={async (score, passed) => {
+        await onProgressUpdate(mod.id, {
+          status: passed ? 'completed' : 'in_progress',
+          best_quiz_score: Math.max(score, progress?.best_quiz_score || 0),
+          attempt_count: (progress?.attempt_count || 0) + 1,
+          ...(passed ? { completed_at: new Date().toISOString() } : {})
+        });
+      }}
+    />;
+  }
+
+  return null;
+}
+
+// ============================================================
+// LESSON BLOCK RENDERER
+// ============================================================
+function LessonBlock({ block }) {
+  switch (block.type) {
+    case 'heading':
+      return <h2>{block.text}</h2>;
+    case 'subheading':
+      return <h3>{block.text}</h3>;
+    case 'paragraph':
+      return <p dangerouslySetInnerHTML={{ __html: block.text }} />;
+    case 'list':
+      return (
+        <ul>{(block.items || []).map((item, i) => <li key={i} dangerouslySetInnerHTML={{ __html: item }} />)}</ul>
+      );
+    case 'numbered':
+      return (
+        <ol>{(block.items || []).map((item, i) => <li key={i} dangerouslySetInnerHTML={{ __html: item }} />)}</ol>
+      );
+    case 'callout': {
+      const colors = {
+        key:    { border: 'var(--gic-blue)',  bg: 'rgba(45,31,177,0.04)', icon: Sparkles },
+        warn:   { border: 'var(--gic-amber)', bg: 'rgba(200,132,28,0.06)', icon: AlertTriangle },
+        do:     { border: 'var(--gic-green)', bg: 'rgba(31,122,74,0.06)', icon: CheckCircle2 },
+        note:   { border: 'var(--gic-warm)',  bg: 'rgba(138,116,94,0.06)', icon: Bookmark }
+      };
+      const c = colors[block.kind] || colors.note;
+      const Icon = c.icon;
+      return (
+        <div className="my-6 p-5 border-l-2 flex items-start gap-3" style={{ borderColor: c.border, background: c.bg }}>
+          <Icon size={18} className="flex-shrink-0 mt-0.5" style={{ color: c.border }} />
+          <div className="flex-1">
+            {block.title && <div className="font-semibold mb-1" style={{ color: c.border }}>{block.title}</div>}
+            <div className="text-sm leading-relaxed" dangerouslySetInnerHTML={{ __html: block.text }} />
+          </div>
+        </div>
+      );
+    }
+    case 'glossary':
+      return (
+        <div className="my-8 gic-card p-6">
+          <div className="eyebrow mb-4">Glossary</div>
+          <dl className="space-y-3">
+            {(block.terms || []).map((t, i) => (
+              <div key={i} className="grid md:grid-cols-[180px_1fr] gap-2 md:gap-4 pb-3 border-b last:border-0" style={{ borderColor: 'var(--gic-line)' }}>
+                <dt className="font-semibold" style={{ color: 'var(--gic-blue)' }}>{t.term}</dt>
+                <dd className="text-sm leading-relaxed" style={{ color: 'var(--gic-ink)' }}>{t.definition}</dd>
+              </div>
+            ))}
+          </dl>
+        </div>
+      );
+    case 'activity':
+      return (
+        <div className="my-8 gic-card p-6" style={{ background: 'rgba(45,31,177,0.03)', borderColor: 'var(--gic-blue)' }}>
+          <div className="eyebrow mb-2" style={{ color: 'var(--gic-blue)' }}>Activity</div>
+          <div className="font-display text-xl font-semibold mb-3">{block.title}</div>
+          <div className="text-sm leading-relaxed mb-4" dangerouslySetInnerHTML={{ __html: block.prompt || '' }} />
+          {block.steps && (
+            <ol className="text-sm space-y-2 pl-0 list-none">
+              {block.steps.map((step, i) => (
+                <li key={i} className="flex gap-3">
+                  <span className="font-mono text-xs flex-shrink-0 w-6" style={{ color: 'var(--gic-blue)' }}>{String(i + 1).padStart(2, '0')}</span>
+                  <span dangerouslySetInnerHTML={{ __html: step }} />
+                </li>
+              ))}
+            </ol>
+          )}
+        </div>
+      );
+    case 'case_study':
+      return (
+        <div className="my-8 border-l-2 pl-6" style={{ borderColor: 'var(--gic-ink)' }}>
+          <div className="eyebrow mb-2">Case Study</div>
+          <div className="font-display text-xl font-semibold mb-3">{block.title}</div>
+          <div className="text-sm leading-relaxed italic mb-4" style={{ color: 'var(--gic-muted)' }} dangerouslySetInnerHTML={{ __html: block.scenario || '' }} />
+          {block.discussion && (
+            <div className="text-sm leading-relaxed" dangerouslySetInnerHTML={{ __html: block.discussion }} />
+          )}
+        </div>
+      );
+    case 'divider':
+      return <div className="gic-rule my-12"><span className="font-display italic text-sm">§</span></div>;
+    default:
+      return null;
+  }
+}
+
+// ============================================================
+// QUIZ RUNNER
+// ============================================================
+function QuizRunner({ mod, quiz, profile, onClose, onComplete }) {
+  const [idx, setIdx]           = useState(0);
+  const [answers, setAnswers]   = useState({});
+  const [submitted, setSubmitted] = useState(false);
+  const [score, setScore]       = useState(0);
+
+  const questions = quiz.questions || [];
+  const passingScore = quiz.passing_score || 80;
+
+  const select = (qIdx, choiceIdx) => {
+    if (submitted) return;
+    setAnswers(a => ({ ...a, [qIdx]: choiceIdx }));
+  };
+
+  const submit = async () => {
+    let correct = 0;
+    questions.forEach((q, i) => {
+      if (answers[i] === q.correct) correct++;
+    });
+    const finalScore = Math.round((correct / questions.length) * 100);
+    setScore(finalScore);
+    setSubmitted(true);
+    const passed = finalScore >= passingScore;
+
+    // Log attempt
+    if (supabase && profile) {
+      await supabase.from('quiz_attempts').insert({
+        user_id: profile.id,
+        module_id: mod.id,
+        quiz_type: 'module_exam',
+        score: correct,
+        max_score: questions.length,
+        passed,
+        answers
+      });
+    }
+
+    await onComplete(finalScore, passed);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  if (submitted) {
+    const passed = score >= passingScore;
+    return (
+      <main className="max-w-2xl mx-auto px-6 lg:px-10 py-16 text-center animate-fade-in">
+        <div className="mb-8">
+          {passed ? (
+            <div className="w-20 h-20 mx-auto rounded-full flex items-center justify-center"
+                 style={{ background: 'rgba(31,122,74,0.1)', color: 'var(--gic-green)' }}>
+              <Award size={36} />
+            </div>
+          ) : (
+            <div className="w-20 h-20 mx-auto rounded-full flex items-center justify-center"
+                 style={{ background: 'rgba(184,61,92,0.1)', color: 'var(--gic-rose)' }}>
+              <RefreshCw size={32} />
+            </div>
+          )}
+        </div>
+
+        <div className="eyebrow mb-3">{passed ? 'Competency Demonstrated' : 'Not Yet'}</div>
+        <h1 className="font-display text-4xl font-semibold mb-3">
+          {passed ? 'Module complete.' : 'Close — but not yet.'}
+        </h1>
+        <p className="text-base mb-2" style={{ color: 'var(--gic-muted)' }}>
+          You scored <strong style={{ color: 'var(--gic-ink)' }}>{score}%</strong> on this assessment.
+        </p>
+        <p className="text-sm" style={{ color: 'var(--gic-muted)' }}>
+          Passing threshold: {passingScore}%
+        </p>
+
+        <div className="mt-10 flex items-center justify-center gap-3">
+          <button onClick={onClose} className="btn-secondary">
+            {passed ? 'Return to module' : 'Review lessons'}
+          </button>
+          {!passed && (
+            <button onClick={() => { setSubmitted(false); setAnswers({}); setIdx(0); }}
+                    className="btn-primary">Try again</button>
+          )}
+        </div>
+      </main>
+    );
+  }
+
+  const q = questions[idx];
+  const totalAnswered = Object.keys(answers).length;
+  const allAnswered = totalAnswered === questions.length;
+
+  return (
+    <main className="max-w-2xl mx-auto px-6 lg:px-10 py-12 animate-fade-in">
+      <button onClick={onClose} className="btn-ghost flex items-center gap-1.5 mb-8">
+        <ArrowLeft size={14} /> Leave assessment
+      </button>
+
+      <div className="mb-6 flex items-center justify-between">
+        <div className="eyebrow">Question {idx + 1} of {questions.length}</div>
+        <div className="text-xs" style={{ color: 'var(--gic-warm)' }}>{totalAnswered} answered</div>
+      </div>
+
+      {/* Progress bar */}
+      <div className="h-1 mb-10" style={{ background: 'var(--gic-line)' }}>
+        <div className="h-full transition-all"
+             style={{ width: `${((idx + 1) / questions.length) * 100}%`, background: 'var(--gic-blue)' }} />
+      </div>
+
+      <h2 className="font-display text-2xl leading-snug mb-8">{q.prompt}</h2>
+
+      <div className="space-y-3 mb-10">
+        {q.options.map((opt, i) => {
+          const isSelected = answers[idx] === i;
+          return (
+            <button
+              key={i}
+              onClick={() => select(idx, i)}
+              className={`quiz-option ${isSelected ? 'selected' : ''}`}>
+              <div className="flex items-start gap-3">
+                <div className="font-mono text-xs mt-1 flex-shrink-0"
+                     style={{ color: isSelected ? 'var(--gic-blue)' : 'var(--gic-warm)' }}>
+                  {String.fromCharCode(65 + i)}
+                </div>
+                <div className="text-sm leading-relaxed">{opt}</div>
+              </div>
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="flex items-center justify-between">
+        <button
+          onClick={() => setIdx(Math.max(0, idx - 1))}
+          disabled={idx === 0}
+          className="btn-ghost flex items-center gap-1.5 disabled:opacity-30">
+          <ArrowLeft size={14} /> Previous
+        </button>
+
+        {idx < questions.length - 1 ? (
+          <button
+            onClick={() => setIdx(idx + 1)}
+            disabled={answers[idx] == null}
+            className="btn-primary flex items-center gap-2 disabled:opacity-30">
+            Next <ArrowRight size={16} />
+          </button>
+        ) : (
+          <button
+            onClick={submit}
+            disabled={!allAnswered}
+            className="btn-primary flex items-center gap-2 disabled:opacity-30">
+            Submit assessment <Check size={16} />
+          </button>
+        )}
+      </div>
+    </main>
+  );
+}
+
+// ============================================================
+// ADMIN DASHBOARD
+// ============================================================
+function AdminDashboard({ modules, profile, onOpenModule, onApprove }) {
+  const isApprover = profile?.role === 'approver';
+  const [filter, setFilter] = useState('all'); // all | draft | approved
+
+  const filtered = modules.filter(m => filter === 'all' ? true : m.status === filter);
+  const draftCount = modules.filter(m => m.status !== 'approved').length;
+  const approvedCount = modules.filter(m => m.status === 'approved').length;
+
+  return (
+    <main className="max-w-7xl mx-auto px-6 lg:px-10 py-12 animate-fade-in">
+      <div className="mb-12">
+        <div className="eyebrow mb-3">Admin · Curriculum Review</div>
+        <h1 className="font-display text-4xl lg:text-5xl font-medium leading-tight mb-4">
+          {isApprover
+            ? <>Review and approve <em>curriculum.</em></>
+            : <>Curriculum status <em>at a glance.</em></>}
+        </h1>
+        <p className="text-base max-w-2xl" style={{ color: 'var(--gic-muted)' }}>
+          {isApprover
+            ? 'As Curriculum Approver, you are the final sign-off on each module. Apprentices see modules only after you approve them. Your approval replaces the AI-drafted disclosure with your reviewed-and-approved attestation.'
+            : 'Track which modules are ready for apprentices and which are still in development. Only Cathy Jackson-Gent can approve modules for publication.'}
+        </p>
+      </div>
+
+      <div className="grid grid-cols-3 gap-px mb-12 border" style={{ borderColor: 'var(--gic-line)', background: 'var(--gic-line)' }}>
+        <Stat label="Total Modules" value={modules.length} />
+        <Stat label="Approved" value={approvedCount} max={modules.length} />
+        <Stat label="Awaiting Review" value={draftCount} />
+      </div>
+
+      <div className="mb-6 flex items-center gap-2">
+        <span className="eyebrow mr-2">Filter</span>
+        {[
+          { id: 'all',      label: `All (${modules.length})` },
+          { id: 'draft',    label: `Awaiting Review (${draftCount})` },
+          { id: 'approved', label: `Approved (${approvedCount})` }
+        ].map(f => (
+          <button key={f.id} onClick={() => setFilter(f.id)}
+                  className={`badge ${filter === f.id ? '' : 'opacity-50'}`}
+                  style={filter === f.id
+                    ? { color: 'var(--gic-blue)', background: 'rgba(45,31,177,0.06)', cursor: 'pointer' }
+                    : { color: 'var(--gic-warm)', cursor: 'pointer' }}>
+            {f.label}
+          </button>
+        ))}
+      </div>
+
+      <div className="gic-card divide-y" style={{ borderColor: 'var(--gic-line)' }}>
+        {filtered.map(m => (
+          <AdminModuleRow key={m.id} module={m} onOpen={onOpenModule} onApprove={onApprove} canApprove={isApprover} />
+        ))}
+        {filtered.length === 0 && (
+          <div className="p-10 text-center text-sm" style={{ color: 'var(--gic-muted)' }}>
+            No modules match this filter.
+          </div>
+        )}
+      </div>
+    </main>
+  );
+}
+
+function AdminModuleRow({ module: mod, onOpen, onApprove, canApprove }) {
+  const Icon = moduleIcon(mod.module_number);
+  const band = competencyColor(mod.module_number);
+  const palette = COLOR_BANDS[band];
+  const isApproved = mod.status === 'approved';
+  const hasContent = (mod.content?.lessons || []).length > 0;
+
+  return (
+    <div className="p-5 flex items-center gap-4 hover:bg-stone-50 transition-colors">
+      <div className="w-10 h-10 rounded flex items-center justify-center flex-shrink-0"
+           style={{ background: palette.pale, color: palette.accent }}>
+        <Icon size={16} />
+      </div>
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2 mb-1">
+          <span className="font-mono text-xs" style={{ color: 'var(--gic-warm)' }}>
+            {String(mod.module_number).padStart(2, '0')} · {mod.competency_id}
+          </span>
+        </div>
+        <div className="font-display text-lg font-semibold truncate">{mod.title}</div>
+      </div>
+      <div className="flex items-center gap-3 flex-shrink-0">
+        {isApproved ? (
+          <span className="badge badge-approved">
+            <CheckCircle2 size={11} />Approved
+          </span>
+        ) : hasContent ? (
+          <span className="badge badge-ai">
+            <Sparkles size={11} />Drafted · Awaiting Review
+          </span>
+        ) : (
+          <span className="badge badge-draft">
+            <Clock size={11} />In Development
+          </span>
+        )}
+        <button onClick={() => onOpen(mod)} className="btn-ghost text-sm">
+          {isApproved ? 'View' : 'Review'} →
+        </button>
+        {canApprove && !isApproved && hasContent && (
+          <button onClick={() => onApprove(mod)} className="btn-primary text-sm py-2 px-4">
+            Approve
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ============================================================
+// RECORDER MODAL — video capture + upload to DO Spaces
+// ============================================================
+function RecorderModal({ module: mod, profile, onClose, onSubmitted }) {
+  const [stage, setStage] = useState('ready'); // ready | recording | preview | uploading | done | error
+  const [stream, setStream] = useState(null);
+  const [recorder, setRecorder] = useState(null);
+  const [chunks, setChunks] = useState([]);
+  const [blob, setBlob] = useState(null);
+  const [previewUrl, setPreviewUrl] = useState(null);
+  const [duration, setDuration] = useState(0);
+  const [notes, setNotes] = useState('');
+  const [error, setError] = useState('');
+  const [uploadPct, setUploadPct] = useState(0);
+  const videoRef = useRef(null);
+  const timerRef = useRef(null);
+  const startedAtRef = useRef(0);
+
+  // Hook camera up to preview <video>
+  useEffect(() => {
+    if (stream && videoRef.current) {
+      videoRef.current.srcObject = stream;
+    }
+  }, [stream]);
+
+  // Cleanup
+  useEffect(() => () => {
+    if (stream) stream.getTracks().forEach(t => t.stop());
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+    if (timerRef.current) clearInterval(timerRef.current);
+  }, []);
+
+  const startCamera = async () => {
+    setError('');
+    try {
+      const s = await navigator.mediaDevices.getUserMedia({
+        video: { width: { ideal: 1280 }, height: { ideal: 720 } },
+        audio: true
+      });
+      setStream(s);
+    } catch (e) {
+      setError('Camera/microphone access denied. Check browser permissions.');
+    }
+  };
+
+  const startRecording = () => {
+    if (!stream) return;
+    const mimeCandidates = [
+      'video/webm;codecs=vp9,opus',
+      'video/webm;codecs=vp8,opus',
+      'video/webm',
+      'video/mp4'
+    ];
+    const mime = mimeCandidates.find(m => MediaRecorder.isTypeSupported(m)) || 'video/webm';
+    const r = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: 1_500_000 });
+    const buf = [];
+    r.ondataavailable = (e) => { if (e.data && e.data.size > 0) buf.push(e.data); };
+    r.onstop = () => {
+      const b = new Blob(buf, { type: mime });
+      setBlob(b);
+      setPreviewUrl(URL.createObjectURL(b));
+      setChunks(buf);
+      setStage('preview');
+      if (stream) stream.getTracks().forEach(t => t.stop());
+      setStream(null);
+      if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
+    };
+    setRecorder(r);
+    setStage('recording');
+    startedAtRef.current = Date.now();
+    setDuration(0);
+    timerRef.current = setInterval(() => {
+      setDuration(Math.floor((Date.now() - startedAtRef.current) / 1000));
+    }, 250);
+    r.start(1000);
+  };
+
+  const stopRecording = () => {
+    if (recorder && recorder.state !== 'inactive') recorder.stop();
+  };
+
+  const reset = () => {
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+    setBlob(null);
+    setPreviewUrl(null);
+    setChunks([]);
+    setDuration(0);
+    setStage('ready');
+  };
+
+  const upload = async () => {
+    if (!blob) return;
+    setStage('uploading');
+    setError('');
+    setUploadPct(0);
+    try {
+      const ext  = blob.type.includes('mp4') ? 'mp4' : 'webm';
+      const fn   = `module${mod.module_number}-${Date.now()}.${ext}`;
+      const { uploadUrl, key } = await callFn('sign-upload', {
+        filename:    fn,
+        contentType: blob.type,
+        moduleId:    mod.id
+      });
+
+      // PUT to DO Spaces with XHR for progress reporting
+      await new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open('PUT', uploadUrl);
+        xhr.setRequestHeader('Content-Type', blob.type);
+        xhr.upload.onprogress = (e) => {
+          if (e.lengthComputable) setUploadPct(Math.round((e.loaded / e.total) * 100));
+        };
+        xhr.onload = () => xhr.status >= 200 && xhr.status < 300 ? resolve() : reject(new Error(`Upload failed (${xhr.status})`));
+        xhr.onerror = () => reject(new Error('Upload network error'));
+        xhr.send(blob);
+      });
+
+      // Insert submission record
+      const { data, error: dbErr } = await supabase
+        .from('competency_submissions')
+        .insert({
+          apprentice_id:    profile.id,
+          module_id:        mod.id,
+          video_path:       key,
+          video_mime:       blob.type,
+          duration_seconds: duration,
+          size_bytes:       blob.size,
+          apprentice_notes: notes.trim() || null,
+          status:           'submitted'
+        })
+        .select()
+        .single();
+      if (dbErr) throw dbErr;
+      setStage('done');
+      onSubmitted && onSubmitted(data);
+    } catch (e) {
+      setError(e.message || 'Upload failed');
+      setStage('error');
+    }
+  };
+
+  const fmtTime = (s) => `${String(Math.floor(s/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(15,22,49,0.6)', backdropFilter: 'blur(6px)' }}>
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+        <div className="p-6 border-b flex items-center justify-between" style={{ borderColor: 'var(--gic-line)' }}>
+          <div>
+            <div className="eyebrow mb-1">Module {String(mod.module_number).padStart(2, '0')} · OJL Submission</div>
+            <div className="font-display text-xl font-semibold">{mod.title}</div>
+          </div>
+          <button onClick={onClose} className="btn-ghost"><X size={18}/></button>
+        </div>
+
+        <div className="p-6">
+          {stage === 'ready' && (
+            <div className="space-y-5">
+              <p className="text-sm leading-relaxed" style={{ color: 'var(--gic-muted)' }}>
+                Record a short video (target: 2–10 minutes) demonstrating the competency. Show the work — a mock client conversation, a walk-through of an analysis, or a portfolio review. Your mentor will review and sign off on OJL hours.
+              </p>
+              <div className="p-4 rounded-lg" style={{ background: 'var(--gic-bone)' }}>
+                <div className="text-xs font-semibold mb-1">Before you start:</div>
+                <ul className="text-xs space-y-1" style={{ color: 'var(--gic-muted)' }}>
+                  <li>· Find a quiet, well-lit space</li>
+                  <li>· Do not use real client data — use anonymized or fictional scenarios</li>
+                  <li>· Keep recordings under 30 minutes</li>
+                </ul>
+              </div>
+              {!stream ? (
+                <button onClick={startCamera} className="btn-primary w-full flex items-center justify-center gap-2">
+                  <Video size={16}/> Enable camera & microphone
+                </button>
+              ) : (
+                <>
+                  <div className="aspect-video rounded-lg overflow-hidden bg-stone-900">
+                    <video ref={videoRef} autoPlay muted playsInline className="w-full h-full object-cover" />
+                  </div>
+                  <button onClick={startRecording} className="btn-primary w-full flex items-center justify-center gap-2">
+                    <Mic size={16}/> Start recording
+                  </button>
+                </>
+              )}
+              {error && (
+                <div className="text-sm p-3 border-l-2 flex items-start gap-2" style={{ borderColor: 'var(--gic-rose)', background: 'rgba(184,61,92,0.06)', color: 'var(--gic-rose)' }}>
+                  <AlertCircle size={16} className="flex-shrink-0 mt-0.5"/>
+                  <span>{error}</span>
+                </div>
+              )}
+            </div>
+          )}
+
+          {stage === 'recording' && (
+            <div className="space-y-5">
+              <div className="aspect-video rounded-lg overflow-hidden bg-stone-900 relative">
+                <video ref={videoRef} autoPlay muted playsInline className="w-full h-full object-cover" />
+                <div className="absolute top-4 left-4 flex items-center gap-2 px-3 py-1.5 rounded-full" style={{ background: 'rgba(184,61,92,0.95)' }}>
+                  <div className="w-2 h-2 rounded-full bg-white animate-pulse" />
+                  <span className="text-xs font-mono font-semibold text-white">REC {fmtTime(duration)}</span>
+                </div>
+              </div>
+              <button onClick={stopRecording} className="btn-primary w-full flex items-center justify-center gap-2" style={{ background: 'var(--gic-rose)' }}>
+                <Square size={14}/> Stop recording
+              </button>
+            </div>
+          )}
+
+          {stage === 'preview' && previewUrl && (
+            <div className="space-y-5">
+              <div className="aspect-video rounded-lg overflow-hidden bg-stone-900">
+                <video src={previewUrl} controls className="w-full h-full"/>
+              </div>
+              <div>
+                <label className="eyebrow block mb-2">Notes for your mentor</label>
+                <textarea
+                  className="gic-input min-h-[100px] resize-y"
+                  placeholder="What did you demonstrate? What scenario? Anything you want feedback on?"
+                  value={notes}
+                  onChange={e => setNotes(e.target.value)}
+                  maxLength={2000}
+                />
+                <div className="text-xs mt-1" style={{ color: 'var(--gic-warm)' }}>
+                  {notes.length}/2000 · Duration {fmtTime(duration)} · {(blob.size / (1024*1024)).toFixed(1)} MB
+                </div>
+              </div>
+              <div className="flex gap-3">
+                <button onClick={reset} className="btn-secondary flex-1 flex items-center justify-center gap-2">
+                  <RotateCcw size={14}/> Re-record
+                </button>
+                <button onClick={upload} className="btn-primary flex-1 flex items-center justify-center gap-2">
+                  <Upload size={14}/> Submit for review
+                </button>
+              </div>
+            </div>
+          )}
+
+          {stage === 'uploading' && (
+            <div className="space-y-5 py-8 text-center">
+              <Loader2 size={32} className="animate-spin mx-auto" style={{ color: 'var(--gic-blue)' }}/>
+              <div className="font-display text-xl font-semibold">Uploading…</div>
+              <div className="w-full max-w-sm mx-auto h-2 rounded-full overflow-hidden" style={{ background: 'var(--gic-line)' }}>
+                <div className="h-full transition-all duration-300" style={{ width: `${uploadPct}%`, background: 'var(--gic-blue)' }}/>
+              </div>
+              <div className="text-sm" style={{ color: 'var(--gic-muted)' }}>{uploadPct}%</div>
+            </div>
+          )}
+
+          {stage === 'done' && (
+            <div className="space-y-4 py-8 text-center">
+              <div className="w-16 h-16 mx-auto rounded-full flex items-center justify-center" style={{ background: 'rgba(31,122,74,0.1)' }}>
+                <CheckCircle2 size={32} style={{ color: 'var(--gic-green)' }}/>
+              </div>
+              <div className="font-display text-xl font-semibold">Submitted for review</div>
+              <p className="text-sm" style={{ color: 'var(--gic-muted)' }}>
+                Your mentor has been notified. You'll see feedback here once reviewed.
+              </p>
+              <button onClick={onClose} className="btn-primary">Done</button>
+            </div>
+          )}
+
+          {stage === 'error' && (
+            <div className="space-y-4 py-4">
+              <div className="text-sm p-3 border-l-2 flex items-start gap-2" style={{ borderColor: 'var(--gic-rose)', background: 'rgba(184,61,92,0.06)', color: 'var(--gic-rose)' }}>
+                <AlertCircle size={16} className="flex-shrink-0 mt-0.5"/>
+                <span>{error}</span>
+              </div>
+              <button onClick={() => setStage('preview')} className="btn-primary w-full">Try again</button>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================
+// SUBMISSION VIEWER — apprentice or mentor views one submission
+// ============================================================
+function SubmissionViewer({ submission, mod, profile, onClose, onUpdated }) {
+  const [videoUrl, setVideoUrl] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError]   = useState('');
+  const [feedback, setFeedback] = useState(submission.mentor_feedback || '');
+  const [hours, setHours]   = useState(submission.ojl_hours_credited || mod?.ojl_hours || 0);
+  const [saving, setSaving] = useState(false);
+
+  const canReview = profile?.role === 'mentor' || profile?.role === 'admin' || profile?.role === 'approver';
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const { url } = await callFn('sign-read', { submissionId: submission.id });
+        setVideoUrl(url);
+      } catch (e) {
+        setError(e.message || 'Could not load video');
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, [submission.id]);
+
+  const decide = async (status) => {
+    setSaving(true);
+    try {
+      const updates = {
+        status,
+        mentor_feedback: feedback.trim() || null,
+        mentor_id: profile.id,
+        reviewed_at: new Date().toISOString(),
+        ojl_hours_credited: status === 'approved' ? Number(hours) || 0 : 0,
+        updated_at: new Date().toISOString()
+      };
+      const { data, error: e } = await supabase
+        .from('competency_submissions')
+        .update(updates)
+        .eq('id', submission.id)
+        .select()
+        .single();
+      if (e) throw e;
+      onUpdated && onUpdated(data);
+      onClose();
+    } catch (e) {
+      setError(e.message || 'Update failed');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(15,22,49,0.6)', backdropFilter: 'blur(6px)' }}>
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-y-auto">
+        <div className="p-6 border-b flex items-center justify-between" style={{ borderColor: 'var(--gic-line)' }}>
+          <div>
+            <div className="eyebrow mb-1">
+              {mod ? `Module ${String(mod.module_number).padStart(2,'0')} · ` : ''}Submission
+            </div>
+            <div className="font-display text-xl font-semibold">{mod?.title || 'Apprentice submission'}</div>
+          </div>
+          <button onClick={onClose} className="btn-ghost"><X size={18}/></button>
+        </div>
+
+        <div className="p-6 space-y-5">
+          <div className="aspect-video rounded-lg overflow-hidden bg-stone-900">
+            {loading
+              ? <div className="w-full h-full flex items-center justify-center text-stone-400"><Loader2 className="animate-spin"/></div>
+              : videoUrl
+                ? <video src={videoUrl} controls className="w-full h-full"/>
+                : <div className="w-full h-full flex items-center justify-center text-stone-400 text-sm">{error || 'Video unavailable'}</div>
+            }
+          </div>
+
+          <div className="grid grid-cols-3 gap-4 text-center text-sm">
+            <div>
+              <div className="eyebrow mb-1">Status</div>
+              <div className="font-medium" style={{
+                color: submission.status === 'approved' ? 'var(--gic-green)'
+                     : submission.status === 'needs_revision' ? 'var(--gic-rose)'
+                     : 'var(--gic-blue)'
+              }}>
+                {submission.status.replace('_', ' ')}
+              </div>
+            </div>
+            <div>
+              <div className="eyebrow mb-1">Submitted</div>
+              <div>{fmtRelative(submission.submitted_at)}</div>
+            </div>
+            <div>
+              <div className="eyebrow mb-1">Duration</div>
+              <div>{Math.floor((submission.duration_seconds||0)/60)}m {(submission.duration_seconds||0)%60}s</div>
+            </div>
+          </div>
+
+          {submission.apprentice_notes && (
+            <div>
+              <div className="eyebrow mb-2">Apprentice notes</div>
+              <div className="text-sm leading-relaxed p-3 rounded-lg whitespace-pre-wrap" style={{ background: 'var(--gic-bone)' }}>
+                {submission.apprentice_notes}
+              </div>
+            </div>
+          )}
+
+          {submission.mentor_feedback && !canReview && (
+            <div>
+              <div className="eyebrow mb-2">Mentor feedback</div>
+              <div className="text-sm leading-relaxed p-3 rounded-lg whitespace-pre-wrap" style={{ background: 'rgba(31,122,74,0.05)' }}>
+                {submission.mentor_feedback}
+              </div>
+              {submission.status === 'approved' && submission.ojl_hours_credited > 0 && (
+                <div className="text-xs mt-2 flex items-center gap-1" style={{ color: 'var(--gic-green)' }}>
+                  <CheckCircle2 size={12}/> {submission.ojl_hours_credited} OJL hours credited
+                </div>
+              )}
+            </div>
+          )}
+
+          {canReview && submission.status !== 'approved' && (
+            <div className="border-t pt-5" style={{ borderColor: 'var(--gic-line)' }}>
+              <div className="eyebrow mb-3">Mentor review</div>
+              <textarea
+                className="gic-input min-h-[100px] resize-y mb-3"
+                placeholder="What was strong? What should they refine? Be specific."
+                value={feedback}
+                onChange={e => setFeedback(e.target.value)}
+                maxLength={3000}
+              />
+              <div className="flex items-center gap-3 mb-4">
+                <label className="eyebrow">OJL hours to credit</label>
+                <input
+                  type="number"
+                  step="0.25"
+                  min="0"
+                  max={mod?.ojl_hours || 24}
+                  className="gic-input w-24"
+                  value={hours}
+                  onChange={e => setHours(e.target.value)}
+                />
+                <span className="text-xs" style={{ color: 'var(--gic-muted)' }}>
+                  of {mod?.ojl_hours || '—'}h required
+                </span>
+              </div>
+              {error && (
+                <div className="text-sm p-3 border-l-2 mb-3" style={{ borderColor: 'var(--gic-rose)', background: 'rgba(184,61,92,0.06)', color: 'var(--gic-rose)' }}>
+                  {error}
+                </div>
+              )}
+              <div className="flex gap-3">
+                <button onClick={() => decide('needs_revision')} disabled={saving}
+                        className="btn-secondary flex-1 flex items-center justify-center gap-2"
+                        style={{ borderColor: 'var(--gic-rose)', color: 'var(--gic-rose)' }}>
+                  <RotateCcw size={14}/> Request revision
+                </button>
+                <button onClick={() => decide('approved')} disabled={saving}
+                        className="btn-primary flex-1 flex items-center justify-center gap-2"
+                        style={{ background: 'var(--gic-green)' }}>
+                  {saving ? <Loader2 size={14} className="animate-spin"/> : <Check size={14}/>} Approve & credit
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================
+// COACH DRAWER — AI study coach sidebar
+// ============================================================
+function CoachDrawer({ open, onClose, profile, lessonContext, moduleTitle }) {
+  const [messages, setMessages] = useState([]);
+  const [input, setInput] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const scrollRef = useRef(null);
+
+  useEffect(() => {
+    if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+  }, [messages, busy]);
+
+  const send = async (text) => {
+    const q = (text || input).trim();
+    if (!q || busy) return;
+    setError('');
+    const history = messages.map(m => ({ role: m.role, content: m.content }));
+    setMessages(prev => [...prev, { role: 'user', content: q }]);
+    setInput('');
+    setBusy(true);
+    try {
+      const { answer } = await callFn('ai-coach', {
+        question: q,
+        lessonContext: lessonContext || '',
+        apprenticeName: profile?.full_name || '',
+        history
+      });
+      setMessages(prev => [...prev, { role: 'assistant', content: answer }]);
+    } catch (e) {
+      setError(e.message || 'Coach unavailable');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (!open) return null;
+
+  const quickPrompts = [
+    'Explain this in plain English.',
+    'Give me a real-world example.',
+    'Quiz me on this — one question.',
+    'Compare this with what we did last lesson.'
+  ];
+
+  return (
+    <>
+      <div className="fixed inset-0 z-40" style={{ background: 'rgba(15,22,49,0.4)', backdropFilter: 'blur(2px)' }} onClick={onClose}/>
+      <div className="fixed top-0 right-0 bottom-0 z-50 w-full sm:w-[420px] bg-white shadow-2xl flex flex-col animate-fade-in">
+        <div className="p-5 border-b flex items-start justify-between" style={{ borderColor: 'var(--gic-line)' }}>
+          <div>
+            <div className="eyebrow mb-1 flex items-center gap-1.5"><Sparkles size={11}/> Study Coach</div>
+            <div className="font-display text-lg font-semibold leading-tight">
+              {moduleTitle || 'Ask anything about your lesson'}
+            </div>
+          </div>
+          <button onClick={onClose} className="btn-ghost"><X size={16}/></button>
+        </div>
+
+        <div ref={scrollRef} className="flex-1 overflow-y-auto p-5 space-y-4">
+          {messages.length === 0 && (
+            <div className="text-sm leading-relaxed" style={{ color: 'var(--gic-muted)' }}>
+              <p className="mb-4">
+                I'm your study coach — I'll explain concepts, give examples, and quiz you. I'm not a financial advisor, just a learning tool.
+              </p>
+              <div className="space-y-2">
+                {quickPrompts.map((p, i) => (
+                  <button key={i} onClick={() => send(p)}
+                          className="w-full text-left text-sm p-3 rounded-lg border hover:bg-stone-50 transition-colors"
+                          style={{ borderColor: 'var(--gic-line)' }}>
+                    {p}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {messages.map((m, i) => (
+            <div key={i} className={m.role === 'user' ? 'flex justify-end' : 'flex justify-start'}>
+              <div className={'max-w-[85%] p-3 rounded-2xl text-sm leading-relaxed whitespace-pre-wrap ' +
+                (m.role === 'user' ? 'text-white' : '')}
+                style={m.role === 'user'
+                  ? { background: 'var(--gic-blue)' }
+                  : { background: 'var(--gic-bone)', color: 'var(--gic-ink)' }}>
+                {m.content}
+              </div>
+            </div>
+          ))}
+          {busy && (
+            <div className="flex justify-start">
+              <div className="p-3 rounded-2xl text-sm flex items-center gap-2" style={{ background: 'var(--gic-bone)', color: 'var(--gic-muted)' }}>
+                <Loader2 size={14} className="animate-spin"/> Thinking…
+              </div>
+            </div>
+          )}
+          {error && (
+            <div className="text-sm p-3 border-l-2" style={{ borderColor: 'var(--gic-rose)', background: 'rgba(184,61,92,0.06)', color: 'var(--gic-rose)' }}>
+              {error}
+            </div>
+          )}
+        </div>
+
+        <div className="p-4 border-t" style={{ borderColor: 'var(--gic-line)' }}>
+          <form onSubmit={e => { e.preventDefault(); send(); }} className="flex gap-2">
+            <input
+              type="text"
+              className="gic-input flex-1"
+              placeholder="Ask about this lesson…"
+              value={input}
+              onChange={e => setInput(e.target.value)}
+              disabled={busy}
+            />
+            <button type="submit" disabled={busy || !input.trim()} className="btn-primary px-3">
+              <Send size={16}/>
+            </button>
+          </form>
+          <div className="text-[10px] mt-2 leading-relaxed" style={{ color: 'var(--gic-warm)' }}>
+            Coach is for learning support, not financial advice. Always verify against approved curriculum.
+          </div>
+        </div>
+      </div>
+    </>
+  );
+}
+
+// ============================================================
+// MENTOR DASHBOARD — lists submissions to review
+// ============================================================
+function MentorDashboard({ profile, modules, onViewSubmission }) {
+  const [submissions, setSubmissions] = useState([]);
+  const [profilesById, setProfilesById] = useState({});
+  const [filter, setFilter] = useState('pending'); // pending | all
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!profile) return;
+    let mounted = true;
+    (async () => {
+      // Mentor sees: submissions where they're the assigned mentor OR
+      // submissions from apprentices whose mentor_id === their id.
+      // Admin/approver sees all.
+      let q = supabase.from('competency_submissions').select('*').order('submitted_at', { ascending: false });
+      const { data: subs } = await q;
+      if (!mounted) return;
+
+      let visible = subs || [];
+      if (profile.role === 'mentor') {
+        const { data: mentees } = await supabase.from('profiles').select('id').eq('mentor_id', profile.id);
+        const menteeIds = new Set((mentees || []).map(m => m.id));
+        visible = visible.filter(s => menteeIds.has(s.apprentice_id) || s.mentor_id === profile.id);
+      }
+      setSubmissions(visible);
+
+      // Fetch apprentice profiles for display
+      const ids = Array.from(new Set(visible.map(s => s.apprentice_id)));
+      if (ids.length > 0) {
+        const { data: pp } = await supabase.from('profiles').select('id,full_name,email').in('id', ids);
+        const map = {}; (pp || []).forEach(p => { map[p.id] = p; });
+        setProfilesById(map);
+      }
+      setLoading(false);
+    })();
+
+    const channel = supabase
+      .channel('submissions-mentor')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'competency_submissions' }, payload => {
+        if (payload.eventType === 'INSERT') setSubmissions(prev => [payload.new, ...prev]);
+        else if (payload.eventType === 'UPDATE') setSubmissions(prev => prev.map(s => s.id === payload.new.id ? payload.new : s));
+      })
+      .subscribe();
+
+    return () => { mounted = false; supabase.removeChannel(channel); };
+  }, [profile?.id, profile?.role]);
+
+  const pending = submissions.filter(s => s.status === 'submitted' || s.status === 'under_review');
+  const display = filter === 'pending' ? pending : submissions;
+
+  if (loading) return <LoadingScreen/>;
+
+  return (
+    <main className="max-w-6xl mx-auto px-6 lg:px-10 py-12 animate-fade-in">
+      <div className="eyebrow mb-3">Mentor Review</div>
+      <h1 className="font-display text-4xl font-semibold mb-2">Apprentice submissions</h1>
+      <p className="text-base mb-10" style={{ color: 'var(--gic-muted)' }}>
+        Review demonstrated competencies and sign off on On-the-Job Learning hours.
+      </p>
+
+      <div className="flex items-center gap-2 mb-6">
+        <button onClick={() => setFilter('pending')}
+                className={'px-4 py-2 rounded-full text-sm font-medium ' + (filter === 'pending' ? 'text-white' : '')}
+                style={filter === 'pending' ? { background: 'var(--gic-blue)' } : { background: 'var(--gic-bone)', color: 'var(--gic-ink)' }}>
+          Pending review ({pending.length})
+        </button>
+        <button onClick={() => setFilter('all')}
+                className={'px-4 py-2 rounded-full text-sm font-medium ' + (filter === 'all' ? 'text-white' : '')}
+                style={filter === 'all' ? { background: 'var(--gic-blue)' } : { background: 'var(--gic-bone)', color: 'var(--gic-ink)' }}>
+          All ({submissions.length})
+        </button>
+      </div>
+
+      {display.length === 0 ? (
+        <div className="gic-card p-12 text-center">
+          <ClipboardCheck size={28} className="mx-auto mb-4" style={{ color: 'var(--gic-warm)' }}/>
+          <div className="font-display text-xl font-semibold mb-2">
+            {filter === 'pending' ? 'Nothing pending' : 'No submissions yet'}
+          </div>
+          <p className="text-sm" style={{ color: 'var(--gic-muted)' }}>
+            {filter === 'pending'
+              ? 'All caught up. New submissions will appear here in real time.'
+              : 'When your apprentices submit recordings, they appear here.'}
+          </p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {display.map(s => {
+            const apprentice = profilesById[s.apprentice_id];
+            const mod = modules.find(m => m.id === s.module_id);
+            return (
+              <button key={s.id}
+                      onClick={() => onViewSubmission(s, mod)}
+                      className="w-full text-left gic-card p-5 hover:shadow-lg transition-all flex items-center justify-between">
+                <div className="flex items-start gap-4 flex-1">
+                  <div className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0"
+                       style={{
+                         background: s.status === 'approved' ? 'rgba(31,122,74,0.08)'
+                                   : s.status === 'needs_revision' ? 'rgba(184,61,92,0.08)'
+                                   : 'rgba(45,31,177,0.06)',
+                         color:      s.status === 'approved' ? 'var(--gic-green)'
+                                   : s.status === 'needs_revision' ? 'var(--gic-rose)'
+                                   : 'var(--gic-blue)'
+                       }}>
+                    {s.status === 'approved' ? <CheckCircle2 size={20}/>
+                     : s.status === 'needs_revision' ? <RotateCcw size={20}/>
+                     : <Video size={20}/>}
+                  </div>
+                  <div className="flex-1">
+                    <div className="font-medium">{apprentice?.full_name || apprentice?.email || 'Apprentice'}</div>
+                    <div className="text-sm" style={{ color: 'var(--gic-muted)' }}>
+                      {mod ? `Module ${String(mod.module_number).padStart(2,'0')} · ${mod.title}` : 'Unknown module'}
+                    </div>
+                    <div className="text-xs mt-1" style={{ color: 'var(--gic-warm)' }}>
+                      Submitted {fmtRelative(s.submitted_at)}
+                      {s.duration_seconds ? ` · ${Math.floor(s.duration_seconds/60)}m ${s.duration_seconds%60}s` : ''}
+                    </div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className="badge" style={
+                    s.status === 'approved' ? { color: 'var(--gic-green)', background: 'rgba(31,122,74,0.08)' }
+                    : s.status === 'needs_revision' ? { color: 'var(--gic-rose)', background: 'rgba(184,61,92,0.08)' }
+                    : { color: 'var(--gic-blue)' }
+                  }>
+                    {s.status.replace('_', ' ')}
+                  </span>
+                  <ChevronRight size={16} style={{ color: 'var(--gic-warm)' }}/>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </main>
+  );
+}
+
+// ============================================================
+// SPONSORS ADMIN — manage employer sponsors + tokens
+// ============================================================
+function SponsorsAdmin({ profile }) {
+  const [sponsors, setSponsors] = useState([]);
+  const [tokens, setTokens]     = useState([]);
+  const [loading, setLoading]   = useState(true);
+  const [showSponsorForm, setShowSponsorForm] = useState(false);
+  const [showTokenForm, setShowTokenForm]     = useState(null); // sponsor object
+  const [copiedId, setCopiedId] = useState(null);
+
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      const [{ data: s }, { data: t }] = await Promise.all([
+        supabase.from('employer_sponsors').select('*').order('created_at', { ascending: false }),
+        supabase.from('sponsorship_tokens').select('*').order('created_at', { ascending: false })
+      ]);
+      if (!mounted) return;
+      setSponsors(s || []);
+      setTokens(t || []);
+      setLoading(false);
+    })();
+    return () => { mounted = false; };
+  }, []);
+
+  const addSponsor = async (form) => {
+    const { data, error } = await supabase
+      .from('employer_sponsors')
+      .insert({ ...form, created_by: profile.id })
+      .select()
+      .single();
+    if (error) { alert('Failed: ' + error.message); return; }
+    setSponsors(prev => [data, ...prev]);
+    setShowSponsorForm(false);
+  };
+
+  const addToken = async (sponsor, form) => {
+    // Generate token: GIC-XXXX-XXXX (random base32)
+    const rand = () => Math.random().toString(36).toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 4).padEnd(4, 'X');
+    const token = `GIC-${rand()}-${rand()}`;
+    const { data, error } = await supabase
+      .from('sponsorship_tokens')
+      .insert({
+        token,
+        employer_sponsor_id: sponsor.id,
+        max_uses: form.max_uses,
+        expires_at: form.expires_at || null,
+        created_by: profile.id
+      })
+      .select()
+      .single();
+    if (error) { alert('Failed: ' + error.message); return; }
+    setTokens(prev => [data, ...prev]);
+    setShowTokenForm(null);
+  };
+
+  const copyToken = (t) => {
+    navigator.clipboard.writeText(t.token);
+    setCopiedId(t.id);
+    setTimeout(() => setCopiedId(null), 1500);
+  };
+
+  if (loading) return <LoadingScreen/>;
+
+  return (
+    <main className="max-w-6xl mx-auto px-6 lg:px-10 py-12 animate-fade-in">
+      <div className="eyebrow mb-3">Administration</div>
+      <h1 className="font-display text-4xl font-semibold mb-2">Employer sponsors</h1>
+      <p className="text-base mb-10" style={{ color: 'var(--gic-muted)' }}>
+        Manage sponsoring organizations and generate enrollment codes for their apprentices.
+      </p>
+
+      {/* Sponsors */}
+      <div className="mb-12">
+        <div className="flex items-center justify-between mb-5">
+          <div className="font-display text-xl font-semibold">Sponsoring organizations</div>
+          <button onClick={() => setShowSponsorForm(true)} className="btn-primary flex items-center gap-2">
+            <Plus size={14}/> Add sponsor
+          </button>
+        </div>
+
+        {sponsors.length === 0 ? (
+          <div className="gic-card p-10 text-center text-sm" style={{ color: 'var(--gic-muted)' }}>
+            No sponsors yet. Add the first organization to begin generating enrollment codes.
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {sponsors.map(s => {
+              const sponsorTokens = tokens.filter(t => t.employer_sponsor_id === s.id);
+              return (
+                <div key={s.id} className="gic-card p-5">
+                  <div className="flex items-start justify-between mb-4">
+                    <div>
+                      <div className="font-display text-lg font-semibold">{s.name}</div>
+                      <div className="text-sm" style={{ color: 'var(--gic-muted)' }}>
+                        {[s.contact_name, s.contact_email, s.contact_phone].filter(Boolean).join(' · ')}
+                      </div>
+                      {s.address && <div className="text-xs mt-1" style={{ color: 'var(--gic-warm)' }}>{s.address}</div>}
+                    </div>
+                    <button onClick={() => setShowTokenForm(s)} className="btn-secondary flex items-center gap-2 text-sm">
+                      <KeySquare size={12}/> Generate code
+                    </button>
+                  </div>
+                  {sponsorTokens.length > 0 && (
+                    <div className="space-y-1.5 pt-3 border-t" style={{ borderColor: 'var(--gic-line)' }}>
+                      {sponsorTokens.map(t => (
+                        <div key={t.id} className="flex items-center justify-between text-sm py-1">
+                          <code className="font-mono px-2 py-1 rounded" style={{ background: 'var(--gic-bone)' }}>{t.token}</code>
+                          <div className="flex items-center gap-3 text-xs" style={{ color: 'var(--gic-muted)' }}>
+                            <span>{t.uses}/{t.max_uses} used</span>
+                            {t.expires_at && <span>· expires {new Date(t.expires_at).toLocaleDateString()}</span>}
+                            <button onClick={() => copyToken(t)} className="btn-ghost flex items-center gap-1">
+                              {copiedId === t.id ? <><Check size={12}/> Copied</> : <><Copy size={12}/> Copy</>}
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {showSponsorForm && (
+        <SponsorForm onSave={addSponsor} onClose={() => setShowSponsorForm(false)}/>
+      )}
+      {showTokenForm && (
+        <TokenForm sponsor={showTokenForm} onSave={(form) => addToken(showTokenForm, form)} onClose={() => setShowTokenForm(null)}/>
+      )}
+    </main>
+  );
+}
+
+function SponsorForm({ onSave, onClose }) {
+  const [form, setForm] = useState({ name: '', contact_name: '', contact_email: '', contact_phone: '', address: '', notes: '' });
+  const submit = (e) => { e.preventDefault(); if (form.name.trim()) onSave(form); };
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(15,22,49,0.6)', backdropFilter: 'blur(6px)' }}>
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg">
+        <div className="p-5 border-b flex items-center justify-between" style={{ borderColor: 'var(--gic-line)' }}>
+          <div className="font-display text-lg font-semibold">New sponsoring organization</div>
+          <button onClick={onClose} className="btn-ghost"><X size={16}/></button>
+        </div>
+        <form onSubmit={submit} className="p-5 space-y-3">
+          <div>
+            <label className="eyebrow block mb-2">Organization name</label>
+            <input className="gic-input" value={form.name} onChange={e => setForm({...form, name: e.target.value})} required autoFocus/>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="eyebrow block mb-2">Contact name</label>
+              <input className="gic-input" value={form.contact_name} onChange={e => setForm({...form, contact_name: e.target.value})}/>
+            </div>
+            <div>
+              <label className="eyebrow block mb-2">Contact phone</label>
+              <input className="gic-input" value={form.contact_phone} onChange={e => setForm({...form, contact_phone: e.target.value})}/>
+            </div>
+          </div>
+          <div>
+            <label className="eyebrow block mb-2">Contact email</label>
+            <input type="email" className="gic-input" value={form.contact_email} onChange={e => setForm({...form, contact_email: e.target.value})}/>
+          </div>
+          <div>
+            <label className="eyebrow block mb-2">Address</label>
+            <input className="gic-input" value={form.address} onChange={e => setForm({...form, address: e.target.value})}/>
+          </div>
+          <div>
+            <label className="eyebrow block mb-2">Notes</label>
+            <textarea className="gic-input min-h-[60px]" value={form.notes} onChange={e => setForm({...form, notes: e.target.value})}/>
+          </div>
+          <div className="flex gap-3 pt-2">
+            <button type="button" onClick={onClose} className="btn-secondary flex-1">Cancel</button>
+            <button type="submit" className="btn-primary flex-1">Save sponsor</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+function TokenForm({ sponsor, onSave, onClose }) {
+  const [maxUses, setMaxUses] = useState(1);
+  const [expiresAt, setExpiresAt] = useState('');
+  const submit = (e) => {
+    e.preventDefault();
+    onSave({
+      max_uses: Math.max(1, parseInt(maxUses, 10) || 1),
+      expires_at: expiresAt ? new Date(expiresAt).toISOString() : null
+    });
+  };
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(15,22,49,0.6)', backdropFilter: 'blur(6px)' }}>
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
+        <div className="p-5 border-b" style={{ borderColor: 'var(--gic-line)' }}>
+          <div className="eyebrow mb-1">{sponsor.name}</div>
+          <div className="font-display text-lg font-semibold">Generate enrollment code</div>
+        </div>
+        <form onSubmit={submit} className="p-5 space-y-3">
+          <div>
+            <label className="eyebrow block mb-2">Max uses</label>
+            <input type="number" min="1" className="gic-input" value={maxUses} onChange={e => setMaxUses(e.target.value)}/>
+            <div className="text-xs mt-1" style={{ color: 'var(--gic-warm)' }}>How many apprentices can redeem this code.</div>
+          </div>
+          <div>
+            <label className="eyebrow block mb-2">Expires (optional)</label>
+            <input type="date" className="gic-input" value={expiresAt} onChange={e => setExpiresAt(e.target.value)}/>
+          </div>
+          <div className="flex gap-3 pt-2">
+            <button type="button" onClick={onClose} className="btn-secondary flex-1">Cancel</button>
+            <button type="submit" className="btn-primary flex-1">Generate</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================
+// MAIN APP
+// ============================================================
+function App({ profile, signOut }) {
+  const [view, setView]         = useState('dashboard'); // dashboard | admin | module | mentor | sponsors
+  const [modules, setModules]   = useState([]);
+  const [progress, setProgress] = useState([]);
+  const [submissions, setSubmissions]               = useState([]);
+  const [openModule, setOpenModule]                 = useState(null);
+  const [recordingModule, setRecordingModule]       = useState(null);
+  const [viewingSubmission, setViewingSubmission]   = useState(null);
+  const [viewingSubmissionMod, setViewingSubmissionMod] = useState(null);
+  const [coachOpen, setCoachOpen]                   = useState(false);
+  const [loading, setLoading]   = useState(true);
+
+  // Load modules
+  useEffect(() => {
+    if (!supabase) return;
+    let mounted = true;
+    (async () => {
+      const { data, error } = await supabase
+        .from('modules')
+        .select('*')
+        .order('module_number', { ascending: true });
+      if (!mounted) return;
+      if (data) setModules(data);
+      setLoading(false);
+    })();
+
+    const channel = supabase
+      .channel('modules-changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'modules' }, payload => {
+        if (payload.eventType === 'INSERT') {
+          setModules(prev => [...prev, payload.new].sort((a, b) => a.module_number - b.module_number));
+        } else if (payload.eventType === 'UPDATE') {
+          setModules(prev => prev.map(m => m.id === payload.new.id ? payload.new : m));
+          setOpenModule(o => o && o.id === payload.new.id ? payload.new : o);
+        } else if (payload.eventType === 'DELETE') {
+          setModules(prev => prev.filter(m => m.id !== payload.old.id));
+        }
+      })
+      .subscribe();
+
+    return () => { mounted = false; supabase.removeChannel(channel); };
+  }, []);
+
+  // Load my progress
+  useEffect(() => {
+    if (!supabase || !profile?.id) return;
+    let mounted = true;
+    (async () => {
+      const { data } = await supabase
+        .from('module_progress')
+        .select('*')
+        .eq('user_id', profile.id);
+      if (mounted && data) setProgress(data);
+    })();
+
+    const channel = supabase
+      .channel('progress-' + profile.id)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'module_progress', filter: `user_id=eq.${profile.id}` }, payload => {
+        if (payload.eventType === 'INSERT') {
+          setProgress(prev => [...prev, payload.new]);
+        } else if (payload.eventType === 'UPDATE') {
+          setProgress(prev => prev.map(p => p.id === payload.new.id ? payload.new : p));
+        }
+      })
+      .subscribe();
+
+    return () => { mounted = false; supabase.removeChannel(channel); };
+  }, [profile?.id]);
+
+  // Load my submissions (apprentice perspective; mentors load via MentorDashboard)
+  useEffect(() => {
+    if (!supabase || !profile?.id) return;
+    let mounted = true;
+    (async () => {
+      const { data } = await supabase
+        .from('competency_submissions')
+        .select('*')
+        .eq('apprentice_id', profile.id)
+        .order('submitted_at', { ascending: false });
+      if (mounted && data) setSubmissions(data);
+    })();
+
+    const channel = supabase
+      .channel('submissions-self-' + profile.id)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'competency_submissions', filter: `apprentice_id=eq.${profile.id}` }, payload => {
+        if (payload.eventType === 'INSERT') setSubmissions(prev => [payload.new, ...prev]);
+        else if (payload.eventType === 'UPDATE') setSubmissions(prev => prev.map(s => s.id === payload.new.id ? payload.new : s));
+        else if (payload.eventType === 'DELETE') setSubmissions(prev => prev.filter(s => s.id !== payload.old.id));
+      })
+      .subscribe();
+
+    return () => { mounted = false; supabase.removeChannel(channel); };
+  }, [profile?.id]);
+
+  const updateProgress = async (moduleId, updates) => {
+    if (!supabase || !profile) return;
+    const existing = progress.find(p => p.module_id === moduleId);
+    const now = new Date().toISOString();
+    if (existing) {
+      const { data } = await supabase
+        .from('module_progress')
+        .update({ ...updates, updated_at: now })
+        .eq('id', existing.id)
+        .select()
+        .single();
+      if (data) setProgress(prev => prev.map(p => p.id === data.id ? data : p));
+    } else {
+      const { data } = await supabase
+        .from('module_progress')
+        .insert({
+          user_id: profile.id,
+          module_id: moduleId,
+          started_at: now,
+          updated_at: now,
+          ...updates
+        })
+        .select()
+        .single();
+      if (data) setProgress(prev => [...prev, data]);
+    }
+  };
+
+  const approveModule = async (mod) => {
+    if (!supabase || !profile) return;
+    if (profile.role !== 'approver') {
+      alert('Only the designated Curriculum Approver can approve modules.');
+      return;
+    }
+    if (!confirm(`Approve "${mod.title}" for publication to apprentices?\n\nYour name and email will be permanently attached to this module as the reviewing fiduciary expert.`)) return;
+    const { data, error } = await supabase
+      .from('modules')
+      .update({
+        status: 'approved',
+        approved_by: profile.id,
+        approved_by_email: profile.email,
+        approved_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', mod.id)
+      .select()
+      .single();
+    if (error) {
+      alert('Approval failed: ' + error.message);
+      return;
+    }
+    if (data) {
+      setModules(prev => prev.map(m => m.id === data.id ? data : m));
+      setOpenModule(o => o && o.id === data.id ? data : o);
+    }
+  };
+
+  const handleOpen = (mod) => {
+    setOpenModule(mod);
+    setView('module');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleNav = (v) => {
+    setView(v);
+    setOpenModule(null);
+    setCoachOpen(false);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleViewSubmission = (s, mod) => {
+    const m = mod || modules.find(x => x.id === s.module_id);
+    setViewingSubmission(s);
+    setViewingSubmissionMod(m);
+  };
+
+  // Lesson context for AI coach — module-level for now
+  const coachContext = openModule
+    ? `Module ${openModule.module_number}: ${openModule.title}\n\n` +
+      (openModule.outcome ? `Outcome: ${openModule.outcome}\n\n` : '') +
+      (Array.isArray(openModule.learning_objectives) && openModule.learning_objectives.length > 0
+        ? `Learning objectives:\n${openModule.learning_objectives.map(o => '- ' + o).join('\n')}`
+        : '')
+    : '';
+
+  if (loading) return <LoadingScreen />;
+
+  const submissionsForCurrentModule = openModule
+    ? submissions.filter(s => s.module_id === openModule.id)
+    : [];
+
+  return (
+    <div className="min-h-screen flex flex-col">
+      <Header
+        profile={profile}
+        onSignOut={signOut}
+        currentView={view}
+        onNavigate={handleNav}
+        onOpenCoach={() => setCoachOpen(true)}
+        coachAvailable={view === 'module'}
+      />
+
+      <div className="flex-1">
+        {view === 'module' && openModule && (
+          <ModuleView
+            module={openModule}
+            progress={progress.find(p => p.module_id === openModule.id)}
+            profile={profile}
+            onBack={() => handleNav('dashboard')}
+            onProgressUpdate={updateProgress}
+            submissions={submissionsForCurrentModule}
+            onOpenRecorder={(mod) => setRecordingModule(mod)}
+            onViewSubmission={(s) => handleViewSubmission(s, openModule)}
+          />
+        )}
+        {view === 'admin' && (
+          <AdminDashboard
+            modules={modules}
+            profile={profile}
+            onOpenModule={handleOpen}
+            onApprove={approveModule}
+          />
+        )}
+        {view === 'mentor' && (
+          <MentorDashboard
+            profile={profile}
+            modules={modules}
+            onViewSubmission={handleViewSubmission}
+          />
+        )}
+        {view === 'sponsors' && (
+          <SponsorsAdmin profile={profile} />
+        )}
+        {view === 'dashboard' && (
+          <ApprenticeDashboard
+            modules={modules}
+            progress={progress}
+            profile={profile}
+            onOpenModule={handleOpen}
+          />
+        )}
+      </div>
+
+      <Footer />
+
+      {recordingModule && (
+        <RecorderModal
+          module={recordingModule}
+          profile={profile}
+          onClose={() => setRecordingModule(null)}
+          onSubmitted={() => setRecordingModule(null)}
+        />
+      )}
+      {viewingSubmission && (
+        <SubmissionViewer
+          submission={viewingSubmission}
+          mod={viewingSubmissionMod}
+          profile={profile}
+          onClose={() => { setViewingSubmission(null); setViewingSubmissionMod(null); }}
+          onUpdated={(updated) => {
+            setSubmissions(prev => prev.map(s => s.id === updated.id ? updated : s));
+          }}
+        />
+      )}
+      <CoachDrawer
+        open={coachOpen}
+        onClose={() => setCoachOpen(false)}
+        profile={profile}
+        lessonContext={coachContext}
+        moduleTitle={openModule?.title}
+      />
+    </div>
+  );
+}
+
+// ============================================================
+// AUTH GATE — wraps App, shows LoginScreen if not signed in
+// ============================================================
+function AuthGate() {
+  const { session, profile, loading, signOut } = useAuth();
+
+  if (!SUPABASE_READY) return <SetupNeeded />;
+  if (loading)        return <LoadingScreen />;
+  if (!session)       return <LoginScreen />;
+  if (!profile)       return <LoadingScreen />;
+
+  return <App profile={profile} signOut={signOut} />;
+}
+
+// ============================================================
+// MOUNT
+// ============================================================
+const root = createRoot(document.getElementById('root'));
+root.render(<AuthGate />);
+</script>
+</body>
+</html>
