@@ -232,7 +232,7 @@ import {
   Mic, Square, Send, Building2, Video, Play, Pause, Upload,
   Plus, Edit3, Trash2, Copy, UserCheck, Users, KeySquare,
   ClipboardCheck, RotateCcw, ExternalLink, Save,
-  Camera, Settings
+  Camera, Settings, Download
 } from 'lucide-react';
 
 // ============================================================
@@ -716,6 +716,12 @@ function Header({ profile, onSignOut, currentView, onNavigate, onOpenCoach, coac
                 <Building2 size={14} />
                 Sponsors
               </button>
+              <button onClick={() => onNavigate('updates')}
+                      className="btn-ghost flex items-center gap-1.5"
+                      style={currentView === 'updates' ? { color: 'var(--gic-blue)' } : {}}>
+                <Globe size={14} />
+                Updates
+              </button>
             </>
           )}
           {profile?.email === 'julius@globalinvestmentcompanies.com' && (
@@ -791,6 +797,10 @@ function Header({ profile, onSignOut, currentView, onNavigate, onOpenCoach, coac
                         <button onClick={() => { setMenuOpen(false); onNavigate('sponsors'); }}
                                 className="w-full text-left px-4 py-2.5 hover:bg-stone-50 flex items-center gap-2 text-sm">
                           <Building2 size={14} /> Sponsors
+                        </button>
+                        <button onClick={() => { setMenuOpen(false); onNavigate('updates'); }}
+                                className="w-full text-left px-4 py-2.5 hover:bg-stone-50 flex items-center gap-2 text-sm">
+                          <Globe size={14} /> Updates
                         </button>
                       </>
                     )}
@@ -973,6 +983,26 @@ function ApprenticeDashboard({ modules, progress, profile, onOpenModule }) {
             : '—'
         } />
       </section>
+
+      {/* Final Exam card — only when all visible approved modules are complete */}
+      {!isAdmin && (() => {
+        const approvedMods = modules.filter(m => m.status === 'approved');
+        const completedCount = progress.filter(p => p.status === 'completed').length;
+        const allDone = approvedMods.length >= 32 && completedCount >= approvedMods.length;
+        if (!allDone) return null;
+        return (
+          <section className="mb-12 gic-card p-8 flex items-center justify-between" style={{ background: 'rgba(45,31,177,0.03)', borderColor: 'var(--gic-blue)' }}>
+            <div>
+              <div className="eyebrow mb-2" style={{ color: 'var(--gic-blue)' }}>Final Assessment</div>
+              <div className="font-display text-2xl font-semibold mb-1">You've completed all modules.</div>
+              <div className="text-sm" style={{ color: 'var(--gic-muted)' }}>Take the final comprehensive exam to earn your Wealth Solutions Counselor certificate.</div>
+            </div>
+            <button onClick={() => onOpenModule({ __finalExam: true })} className="btn-primary flex items-center gap-2">
+              <Award size={15}/> Take Final Exam
+            </button>
+          </section>
+        );
+      })()}
 
       {/* Module sections */}
       <ModuleSection
@@ -1673,14 +1703,46 @@ function QuizRunner({ mod, quiz, profile, onClose, onComplete }) {
 // ============================================================
 // ADMIN DASHBOARD
 // ============================================================
-function AdminDashboard({ modules, profile, onOpenModule, onApprove, onModuleUpdated }) {
+function AdminDashboard({ modules, profile, onOpenModule, onApprove, onModuleUpdated, onModuleDeleted }) {
   const isApprover = profile?.role === 'approver';
   const [filter, setFilter] = useState('all'); // all | draft | approved
   const [editingModule, setEditingModule] = useState(null);
+  const [showCreateForm, setShowCreateForm] = useState(false);
+  const [createTitle, setCreateTitle] = useState('');
+  const [createNumber, setCreateNumber] = useState('');
+  const [creating, setCreating] = useState(false);
 
   const filtered = modules.filter(m => filter === 'all' ? true : m.status === filter);
   const draftCount = modules.filter(m => m.status !== 'approved').length;
   const approvedCount = modules.filter(m => m.status === 'approved').length;
+
+  const deleteModule = async (id) => {
+    const { error } = await supabase.from('modules').delete().eq('id', id);
+    if (error) { alert('Delete failed: ' + error.message); return; }
+    onModuleDeleted && onModuleDeleted(id);
+  };
+
+  const createModule = async (e) => {
+    e.preventDefault();
+    if (!createTitle.trim()) return;
+    setCreating(true);
+    const maxNum = modules.reduce((mx, m) => Math.max(mx, m.module_number || 0), 0);
+    const moduleNumber = parseInt(createNumber) || maxNum + 1;
+    const { data, error } = await supabase.from('modules').insert({
+      title: createTitle.trim(),
+      module_number: moduleNumber,
+      short_description: '',
+      learning_objectives: [],
+      content: { lessons: [] },
+      is_published: false
+    }).select().single();
+    setCreating(false);
+    if (error) { alert('Failed: ' + error.message); return; }
+    onModuleUpdated && onModuleUpdated(data);
+    setShowCreateForm(false);
+    setCreateTitle('');
+    setCreateNumber('');
+  };
 
   return (
     <main className="max-w-7xl mx-auto px-6 lg:px-10 py-12 animate-fade-in">
@@ -1704,7 +1766,7 @@ function AdminDashboard({ modules, profile, onOpenModule, onApprove, onModuleUpd
         <Stat label="Awaiting Review" value={draftCount} />
       </div>
 
-      <div className="mb-6 flex items-center gap-2">
+      <div className="mb-6 flex items-center gap-2 flex-wrap">
         <span className="eyebrow mr-2">Filter</span>
         {[
           { id: 'all',      label: `All (${modules.length})` },
@@ -1719,11 +1781,39 @@ function AdminDashboard({ modules, profile, onOpenModule, onApprove, onModuleUpd
             {f.label}
           </button>
         ))}
+        <div className="flex-1" />
+        <button onClick={() => setShowCreateForm(v => !v)}
+          className="btn-primary flex items-center gap-2 text-sm py-2 px-4">
+          <Plus size={13}/> New Module
+        </button>
       </div>
+
+      {showCreateForm && (
+        <form onSubmit={createModule} className="gic-card p-5 mb-5 flex items-end gap-3 flex-wrap">
+          <div className="flex-1 min-w-[200px]">
+            <label className="eyebrow block mb-1">Module Title</label>
+            <input value={createTitle} onChange={e=>setCreateTitle(e.target.value)}
+              className="w-full border rounded-lg p-2.5 text-sm" style={{borderColor:'var(--gic-line)'}}
+              placeholder="e.g. Introduction to Estate Planning" autoFocus required />
+          </div>
+          <div style={{width:'120px'}}>
+            <label className="eyebrow block mb-1">Module #</label>
+            <input type="number" value={createNumber} onChange={e=>setCreateNumber(e.target.value)}
+              className="w-full border rounded-lg p-2.5 text-sm" style={{borderColor:'var(--gic-line)'}}
+              placeholder={String(modules.reduce((mx, m) => Math.max(mx, m.module_number || 0), 0) + 1)} />
+          </div>
+          <div className="flex items-center gap-2 pb-0.5">
+            <button type="submit" disabled={creating} className="btn-primary text-sm py-2.5 px-4">
+              {creating ? 'Creating…' : 'Create'}
+            </button>
+            <button type="button" onClick={() => setShowCreateForm(false)} className="btn-ghost text-sm">Cancel</button>
+          </div>
+        </form>
+      )}
 
       <div className="gic-card divide-y" style={{ borderColor: 'var(--gic-line)' }}>
         {filtered.map(m => (
-          <AdminModuleRow key={m.id} module={m} onOpen={onOpenModule} onApprove={onApprove} onEdit={setEditingModule} canApprove={isApprover} />
+          <AdminModuleRow key={m.id} module={m} onOpen={onOpenModule} onApprove={onApprove} onEdit={setEditingModule} canApprove={isApprover} onDelete={deleteModule} />
         ))}
         {filtered.length === 0 && (
           <div className="p-10 text-center text-sm" style={{ color: 'var(--gic-muted)' }}>
@@ -1743,15 +1833,17 @@ function AdminDashboard({ modules, profile, onOpenModule, onApprove, onModuleUpd
   );
 }
 
-function AdminModuleRow({ module: mod, onOpen, onApprove, onEdit, canApprove }) {
+function AdminModuleRow({ module: mod, onOpen, onApprove, onEdit, canApprove, onDelete }) {
   const Icon = moduleIcon(mod.module_number);
   const band = competencyColor(mod.module_number);
   const palette = COLOR_BANDS[band];
   const isApproved = mod.status === 'approved';
   const hasContent = (mod.content?.lessons || []).length > 0;
+  const [hovered, setHovered] = useState(false);
 
   return (
-    <div className="p-5 flex items-center gap-4 hover:bg-stone-50 transition-colors">
+    <div className="p-5 flex items-center gap-4 hover:bg-stone-50 transition-colors"
+      onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)}>
       <div className="w-10 h-10 rounded flex items-center justify-center flex-shrink-0"
            style={{ background: palette.pale, color: palette.accent }}>
         <Icon size={16} />
@@ -1787,6 +1879,15 @@ function AdminModuleRow({ module: mod, onOpen, onApprove, onEdit, canApprove }) 
         {canApprove && !isApproved && hasContent && (
           <button onClick={() => onApprove(mod)} className="btn-primary text-sm py-2 px-4">
             Approve
+          </button>
+        )}
+        {hovered && onDelete && (
+          <button
+            onClick={e => { e.stopPropagation(); if (confirm(`Delete module "${mod.title}"? This cannot be undone.`)) onDelete(mod.id); }}
+            className="w-7 h-7 flex items-center justify-center rounded hover:bg-red-50 transition"
+            style={{ color: 'var(--gic-rose)' }}
+            title="Delete module">
+            <Trash2 size={13}/>
           </button>
         )}
       </div>
@@ -2368,7 +2469,10 @@ function CoachDrawer({ open, onClose, profile, lessonContext, moduleTitle }) {
 // MENTOR DASHBOARD — lists submissions to review + questions tab
 // ============================================================
 function MentorDashboard({ profile, modules, onViewSubmission }) {
-  const [activeTab, setActiveTab] = useState('submissions'); // submissions | questions
+  const [activeTab, setActiveTab] = useState('submissions'); // submissions | questions | certificates
+  const [allCerts, setAllCerts] = useState([]);
+  const [certsLoading, setCertsLoading] = useState(false);
+  const [viewingCert, setViewingCert] = useState(null);
   const [submissions, setSubmissions] = useState([]);
   const [profilesById, setProfilesById] = useState({});
   const [filter, setFilter] = useState('pending'); // pending | all
@@ -2419,6 +2523,14 @@ function MentorDashboard({ profile, modules, onViewSubmission }) {
 
     return () => { mounted = false; supabase.removeChannel(channel); };
   }, [profile?.id, profile?.role]);
+
+  // Load certificates when tab becomes active
+  useEffect(() => {
+    if (activeTab !== 'certificates' || !supabase) return;
+    setCertsLoading(true);
+    supabase.from('certificates').select('*').order('issued_at', { ascending: false })
+      .then(({ data }) => { setAllCerts(data || []); setCertsLoading(false); });
+  }, [activeTab]);
 
   // Load questions when tab becomes active
   useEffect(() => {
@@ -2483,7 +2595,7 @@ function MentorDashboard({ profile, modules, onViewSubmission }) {
 
       {/* Tab bar */}
       <div className="flex gap-1 mb-8 border-b" style={{ borderColor: 'var(--gic-line)' }}>
-        {[['submissions','Submissions'],['questions','Questions']].map(([id,label]) => (
+        {[['submissions','Submissions'],['questions','Questions'],['certificates','Certificates']].map(([id,label]) => (
           <button key={id} onClick={() => setActiveTab(id)}
             className="px-5 py-3 text-sm font-medium"
             style={{ borderBottom: activeTab===id ? '2px solid var(--gic-blue)' : '2px solid transparent',
@@ -2575,6 +2687,39 @@ function MentorDashboard({ profile, modules, onViewSubmission }) {
           </div>
         )}
       </>}
+
+      {activeTab === 'certificates' && (
+        certsLoading ? <LoadingScreen /> : allCerts.length === 0 ? (
+          <div className="gic-card p-12 text-center">
+            <Award size={28} className="mx-auto mb-4" style={{ color: 'var(--gic-warm)' }}/>
+            <div className="font-display text-xl font-semibold mb-2">No certificates issued yet</div>
+            <p className="text-sm" style={{ color: 'var(--gic-muted)' }}>Certificates appear here once apprentices pass the final exam.</p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {allCerts.map(c => (
+              <div key={c.id} className="gic-card p-5 flex items-center justify-between">
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 rounded-full flex items-center justify-center" style={{ background: 'rgba(45,31,177,0.08)', color: 'var(--gic-blue)' }}>
+                    <Award size={20}/>
+                  </div>
+                  <div>
+                    <div className="font-semibold">{c.user_name}</div>
+                    <div className="text-xs mt-0.5" style={{ color: 'var(--gic-muted)' }}>{c.user_email} · Score: {c.exam_score}%</div>
+                    <div className="text-xs mt-0.5" style={{ color: 'var(--gic-warm)' }}>
+                      Issued {new Date(c.issued_at).toLocaleDateString('en-US', { year:'numeric', month:'long', day:'numeric' })} · {c.certificate_number}
+                    </div>
+                  </div>
+                </div>
+                <button onClick={() => setViewingCert(c)} className="btn-ghost flex items-center gap-1.5 text-sm" style={{ color: 'var(--gic-blue)' }}>
+                  <Download size={13}/> View / Print
+                </button>
+              </div>
+            ))}
+            {viewingCert && <CertificateView cert={viewingCert} onClose={() => setViewingCert(null)} />}
+          </div>
+        )
+      )}
 
       {activeTab === 'questions' && <>
         {questionsLoading ? <LoadingScreen /> : questions.length === 0 ? (
@@ -3090,10 +3235,62 @@ function QuestionsPage({ profile }) {
 }
 
 // ============================================================
-// APPRENTICE VIEW — wraps questions + OJL submissions
+// MY CERTIFICATES — apprentice view of earned certificates
+// ============================================================
+function MyCertificates({ profile }) {
+  const [certs, setCerts] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [viewing, setViewing] = useState(null);
+
+  useEffect(() => {
+    if (!supabase || !profile?.id) return;
+    supabase.from('certificates').select('*').eq('user_id', profile.id).order('issued_at', { ascending: false })
+      .then(({ data }) => { setCerts(data || []); setLoading(false); });
+  }, [profile?.id]);
+
+  if (loading) return <div className="py-8 text-center"><Loader2 className="animate-spin mx-auto" size={24} style={{ color: 'var(--gic-blue)' }} /></div>;
+
+  return (
+    <div>
+      {certs.length === 0 ? (
+        <div className="gic-card p-10 text-center">
+          <Award size={28} className="mx-auto mb-3" style={{ color: 'var(--gic-warm)' }} />
+          <div className="font-display text-xl font-semibold mb-2">No certificates yet</div>
+          <p className="text-sm" style={{ color: 'var(--gic-muted)' }}>Complete all modules and pass the final exam to earn your certificate.</p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {certs.map(c => (
+            <div key={c.id} className="gic-card p-5 flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 rounded-full flex items-center justify-center flex-shrink-0" style={{ background: 'rgba(45,31,177,0.08)', color: 'var(--gic-blue)' }}>
+                  <Award size={22}/>
+                </div>
+                <div>
+                  <div className="font-semibold">Wealth Solutions Counselor</div>
+                  <div className="text-xs mt-0.5" style={{ color: 'var(--gic-muted)' }}>
+                    Score: {c.exam_score}% · Issued {new Date(c.issued_at).toLocaleDateString('en-US', { year:'numeric', month:'long', day:'numeric' })}
+                  </div>
+                  <div className="text-xs font-mono mt-0.5" style={{ color: 'var(--gic-warm)' }}>{c.certificate_number}</div>
+                </div>
+              </div>
+              <button onClick={() => setViewing(c)} className="btn-ghost flex items-center gap-1.5 text-sm" style={{ color: 'var(--gic-blue)' }}>
+                <Download size={13}/> View / Print
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+      {viewing && <CertificateView cert={viewing} onClose={() => setViewing(null)} />}
+    </div>
+  );
+}
+
+// ============================================================
+// APPRENTICE VIEW — wraps questions + OJL submissions + certificates
 // ============================================================
 function ApprenticeView({ profile, modules, submissions, onOpenModule, onViewSubmission }) {
-  const [tab, setTab] = useState('questions'); // questions | submissions
+  const [tab, setTab] = useState('questions'); // questions | submissions | certificates
 
   return (
     <main className="max-w-4xl mx-auto px-6 lg:px-10 py-12 animate-fade-in">
@@ -3101,7 +3298,7 @@ function ApprenticeView({ profile, modules, submissions, onOpenModule, onViewSub
       <h1 className="font-display text-4xl font-semibold mb-8">Apprentice Dashboard</h1>
 
       <div className="flex gap-1 mb-8 border-b" style={{ borderColor: 'var(--gic-line)' }}>
-        {[['questions','My Questions'],['submissions','OJL Submissions']].map(([id,label]) => (
+        {[['questions','My Questions'],['submissions','OJL Submissions'],['certificates','Certificates']].map(([id,label]) => (
           <button key={id} onClick={() => setTab(id)}
             className="px-5 py-3 text-sm font-medium"
             style={{ borderBottom: tab===id ? '2px solid var(--gic-blue)' : '2px solid transparent',
@@ -3141,6 +3338,7 @@ function ApprenticeView({ profile, modules, submissions, onOpenModule, onViewSub
           }
         </div>
       )}
+      {tab === 'certificates' && <MyCertificates profile={profile} />}
     </main>
   );
 }
@@ -3161,6 +3359,7 @@ const BLOCK_TYPES = [
   { type: 'audio',      label: 'Audio' },
   { type: 'glossary',   label: 'Glossary' },
   { type: 'activity',   label: 'Activity' },
+  { type: 'case_study', label: 'Case Study' },
   { type: 'divider',    label: 'Divider' },
 ];
 
@@ -3168,7 +3367,7 @@ const BLOCK_COLORS = {
   paragraph:'#6b7280', heading:'#1d4ed8', subheading:'#3b82f6',
   list:'#7c3aed', numbered:'#7c3aed', callout:'#d97706',
   video:'#059669', image:'#0891b2', audio:'#9333ea',
-  glossary:'#dc2626', activity:'#2563eb', divider:'#9ca3af',
+  glossary:'#dc2626', activity:'#2563eb', case_study:'#78716c', divider:'#9ca3af',
 };
 
 const BLOCK_DEFAULTS = {
@@ -3183,32 +3382,37 @@ const BLOCK_DEFAULTS = {
   audio:      { type:'audio', url:'', title:'', listen_time:'' },
   glossary:   { type:'glossary', terms:[{term:'',definition:''}] },
   activity:   { type:'activity', title:'', prompt:'', steps:[''] },
+  case_study: { type:'case_study', title:'', scenario:'', discussion:'' },
   divider:    { type:'divider' },
 };
 
 function AddBlockMenu({ onAdd }) {
   const [open, setOpen] = useState(false);
+  if (!open) return (
+    <button onClick={() => setOpen(true)}
+      className="w-full mt-2 p-2.5 border-2 border-dashed rounded-lg text-xs font-medium flex items-center justify-center gap-1.5 hover:bg-stone-50 transition"
+      style={{ borderColor: 'var(--gic-line)', color: 'var(--gic-muted)' }}>
+      <Plus size={12}/> Add content block
+    </button>
+  );
   return (
-    <div className="relative mt-2">
-      <button onClick={() => setOpen(!open)}
-        className="w-full p-2 border-2 border-dashed rounded-lg text-xs font-medium flex items-center justify-center gap-1.5 hover:bg-stone-50 transition"
-        style={{ borderColor: 'var(--gic-line)', color: 'var(--gic-muted)' }}>
-        <Plus size={12}/> Add content block
+    <div className="mt-2 border rounded-xl p-3" style={{ borderColor: 'var(--gic-line)', background: '#faf9f7' }}>
+      <div className="text-xs font-semibold mb-2.5" style={{ color: 'var(--gic-warm)' }}>Choose block type</div>
+      <div className="grid grid-cols-3 gap-1.5">
+        {BLOCK_TYPES.map(({ type, label }) => (
+          <button key={type}
+            onClick={() => { onAdd(type); setOpen(false); }}
+            className="text-left px-2.5 py-2 rounded-lg border text-xs font-medium hover:opacity-80 transition"
+            style={{ color: BLOCK_COLORS[type] || 'var(--gic-ink)', borderColor: (BLOCK_COLORS[type] || '#e5e7eb') + '55', background: (BLOCK_COLORS[type] || '#6b7280') + '10' }}>
+            {label}
+          </button>
+        ))}
+      </div>
+      <button onClick={() => setOpen(false)}
+        className="mt-2.5 w-full text-xs text-center py-1 rounded hover:bg-stone-100"
+        style={{ color: 'var(--gic-muted)' }}>
+        Cancel
       </button>
-      {open && (
-        <>
-          <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
-          <div className="absolute left-0 right-0 mt-1 z-20 gic-card p-2 grid grid-cols-3 gap-1 shadow-lg">
-            {BLOCK_TYPES.map(({type, label}) => (
-              <button key={type} onClick={() => { onAdd(type); setOpen(false); }}
-                className="text-left px-3 py-2 rounded-lg hover:bg-stone-50 text-xs font-medium transition"
-                style={{ color: BLOCK_COLORS[type] || 'var(--gic-ink)' }}>
-                {label}
-              </button>
-            ))}
-          </div>
-        </>
-      )}
     </div>
   );
 }
@@ -3256,6 +3460,22 @@ function BlockFields({ block, onUpdate }) {
     case 'video':
       return (
         <div className="space-y-2">
+          <div className="flex items-center gap-2 mb-1">
+            <label className="text-xs px-2 py-1 rounded border cursor-pointer hover:bg-stone-50 flex items-center gap-1"
+              style={{ borderColor: 'var(--gic-line)', color: 'var(--gic-blue)' }}>
+              <Upload size={11}/> Upload video
+              <input type="file" accept="video/*" className="sr-only" onChange={async e => {
+                const file = e.target.files?.[0]; if (!file) return;
+                const path = `videos/${Date.now()}-${file.name}`;
+                const { error } = await supabase.storage.from('media').upload(path, file, { upsert: true });
+                if (!error) {
+                  const { data: u } = supabase.storage.from('media').getPublicUrl(path);
+                  onUpdate({ url: u.publicUrl });
+                }
+              }}/>
+            </label>
+            <span className="text-xs" style={{ color: 'var(--gic-muted)' }}>or paste URL below</span>
+          </div>
           <input value={block.url||''} onChange={e=>onUpdate({url:e.target.value})} className={ic} style={fs} placeholder="YouTube URL, Vimeo URL, or direct video link" />
           <div className="grid grid-cols-2 gap-2">
             <input value={block.title||''} onChange={e=>onUpdate({title:e.target.value})} className={ic} style={fs} placeholder="Title (optional)" />
@@ -3267,6 +3487,22 @@ function BlockFields({ block, onUpdate }) {
     case 'image':
       return (
         <div className="space-y-2">
+          <div className="flex items-center gap-2 mb-1">
+            <label className="text-xs px-2 py-1 rounded border cursor-pointer hover:bg-stone-50 flex items-center gap-1"
+              style={{ borderColor: 'var(--gic-line)', color: 'var(--gic-blue)' }}>
+              <Upload size={11}/> Upload image
+              <input type="file" accept="image/*" className="sr-only" onChange={async e => {
+                const file = e.target.files?.[0]; if (!file) return;
+                const path = `images/${Date.now()}-${file.name}`;
+                const { error } = await supabase.storage.from('media').upload(path, file, { upsert: true });
+                if (!error) {
+                  const { data: u } = supabase.storage.from('media').getPublicUrl(path);
+                  onUpdate({ url: u.publicUrl });
+                }
+              }}/>
+            </label>
+            <span className="text-xs" style={{ color: 'var(--gic-muted)' }}>or paste URL below</span>
+          </div>
           <input value={block.url||''} onChange={e=>onUpdate({url:e.target.value})} className={ic} style={fs} placeholder="Image URL (paste any image link)" />
           <input value={block.caption||''} onChange={e=>onUpdate({caption:e.target.value})} className={ic} style={fs} placeholder="Caption (optional)" />
           {block.url && <img src={block.url} alt="preview" style={{maxHeight:'100px',borderRadius:'6px',objectFit:'cover'}} onError={e=>e.target.style.display='none'} />}
@@ -3275,6 +3511,22 @@ function BlockFields({ block, onUpdate }) {
     case 'audio':
       return (
         <div className="space-y-2">
+          <div className="flex items-center gap-2 mb-1">
+            <label className="text-xs px-2 py-1 rounded border cursor-pointer hover:bg-stone-50 flex items-center gap-1"
+              style={{ borderColor: 'var(--gic-line)', color: 'var(--gic-blue)' }}>
+              <Upload size={11}/> Upload audio
+              <input type="file" accept="audio/*" className="sr-only" onChange={async e => {
+                const file = e.target.files?.[0]; if (!file) return;
+                const path = `audios/${Date.now()}-${file.name}`;
+                const { error } = await supabase.storage.from('media').upload(path, file, { upsert: true });
+                if (!error) {
+                  const { data: u } = supabase.storage.from('media').getPublicUrl(path);
+                  onUpdate({ url: u.publicUrl });
+                }
+              }}/>
+            </label>
+            <span className="text-xs" style={{ color: 'var(--gic-muted)' }}>or paste URL below</span>
+          </div>
           <input value={block.url||''} onChange={e=>onUpdate({url:e.target.value})} className={ic} style={fs} placeholder="Audio file URL (MP3, WAV, etc.)" />
           <div className="grid grid-cols-2 gap-2">
             <input value={block.title||''} onChange={e=>onUpdate({title:e.target.value})} className={ic} style={fs} placeholder="Title (optional)" />
@@ -3313,6 +3565,14 @@ function BlockFields({ block, onUpdate }) {
           </div>
         </div>
       );
+    case 'case_study':
+      return (
+        <div className="space-y-2">
+          <input value={block.title||''} onChange={e=>onUpdate({title:e.target.value})} className={ic} style={fs} placeholder="Case study title" />
+          <textarea value={block.scenario||''} onChange={e=>onUpdate({scenario:e.target.value})} rows={3} className={tc} style={fs} placeholder="Scenario description..." />
+          <textarea value={block.discussion||''} onChange={e=>onUpdate({discussion:e.target.value})} rows={3} className={tc} style={fs} placeholder="Discussion / analysis..." />
+        </div>
+      );
     case 'divider':
       return <div className="text-xs text-center py-1" style={{color:'var(--gic-muted)'}}>— section break —</div>;
     default:
@@ -3320,15 +3580,24 @@ function BlockFields({ block, onUpdate }) {
   }
 }
 
-function BlockEditor({ block, onUpdate, onDelete, onMove, isFirst, isLast }) {
+function BlockEditor({ block, onUpdate, onDelete, onMove, isFirst, isLast, bIdx, onReorder }) {
+  const [isDragging, setIsDragging] = useState(false);
   const label = { paragraph:'Text', heading:'Heading', subheading:'Subheading', list:'Bullet List',
     numbered:'Numbered List', callout:'Callout', video:'Video', image:'Image',
-    audio:'Audio', glossary:'Glossary', activity:'Activity', divider:'Divider' }[block.type] || block.type;
+    audio:'Audio', glossary:'Glossary', activity:'Activity', case_study:'Case Study', divider:'Divider' }[block.type] || block.type;
   const color = BLOCK_COLORS[block.type] || '#6b7280';
 
   return (
-    <div className="border rounded-lg overflow-hidden" style={{borderColor:'rgba(0,0,0,0.1)'}}>
+    <div className="border rounded-lg overflow-hidden"
+      style={{borderColor:'rgba(0,0,0,0.1)', opacity: isDragging ? 0.5 : 1, cursor:'grab'}}
+      draggable="true"
+      onDragStart={e => { e.dataTransfer.effectAllowed='move'; e.dataTransfer.setData('text/plain', String(bIdx)); setIsDragging(true); }}
+      onDragEnd={() => setIsDragging(false)}
+      onDragOver={e => { e.preventDefault(); e.dataTransfer.dropEffect='move'; }}
+      onDrop={e => { e.preventDefault(); const from = parseInt(e.dataTransfer.getData('text/plain')); if (from !== bIdx && onReorder) onReorder(from, bIdx); }}
+    >
       <div className="flex items-center gap-2 px-3 py-2" style={{background:'rgba(0,0,0,0.02)'}}>
+        <span className="text-xs select-none" style={{color:'var(--gic-warm)',letterSpacing:'0.05em'}}>⠿</span>
         <span className="text-xs font-semibold px-2 py-0.5 rounded" style={{background:color+'18', color}}>{label}</span>
         <div className="flex-1" />
         <button onClick={()=>onMove(-1)} disabled={isFirst} className="w-5 h-5 flex items-center justify-center rounded hover:bg-stone-100 disabled:opacity-25 text-xs">↑</button>
@@ -3541,10 +3810,17 @@ function ModuleEditor({ mod, onClose, onSaved }) {
                             <div className="space-y-2">
                               {(lesson.blocks||[]).map((block, bIdx) => (
                                 <BlockEditor key={bIdx} block={block}
+                                  bIdx={bIdx}
                                   onUpdate={patch => updateBlock(lIdx,bIdx,patch)}
                                   onDelete={() => deleteBlock(lIdx,bIdx)}
                                   onMove={dir => moveBlock(lIdx,bIdx,dir)}
-                                  isFirst={bIdx===0} isLast={bIdx===(lesson.blocks||[]).length-1} />
+                                  isFirst={bIdx===0} isLast={bIdx===(lesson.blocks||[]).length-1}
+                                  onReorder={(from, to) => {
+                                    const blocks = [...lessonsData[lIdx].blocks];
+                                    const [moved] = blocks.splice(from, 1);
+                                    blocks.splice(to, 0, moved);
+                                    updateLesson(lIdx, { blocks });
+                                  }} />
                               ))}
                             </div>
                             <AddBlockMenu onAdd={type => addBlock(lIdx,type)} />
@@ -3710,10 +3986,159 @@ function useBranding(profile) {
 }
 
 // ============================================================
+// INDUSTRY UPDATES — AI-monitored compliance & regulatory changes
+// ============================================================
+function IndustryUpdates({ profile }) {
+  const [updates, setUpdates] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [checking, setChecking] = useState(false);
+
+  const load = async () => {
+    const { data } = await supabase.from('industry_updates').select('*')
+      .eq('dismissed', false).order('created_at', { ascending: false }).limit(50);
+    setUpdates(data || []);
+    setLoading(false);
+  };
+
+  useEffect(() => { load(); }, []);
+
+  const dismiss = async (id) => {
+    await supabase.from('industry_updates').update({ dismissed: true }).eq('id', id);
+    setUpdates(prev => prev.filter(u => u.id !== id));
+  };
+
+  const runCheck = async () => {
+    setChecking(true);
+    try {
+      const r = await fetch('/.netlify/functions/industry-check');
+      await r.json();
+      await load();
+    } catch {}
+    setChecking(false);
+  };
+
+  const catColor = { regulatory:'var(--gic-rose)', tax:'var(--gic-amber)', market:'var(--gic-blue)', compliance:'var(--gic-green)', general:'var(--gic-warm)' };
+
+  if (loading) return <LoadingScreen />;
+
+  return (
+    <main className="max-w-4xl mx-auto px-6 lg:px-10 py-12 animate-fade-in">
+      <div className="flex items-center justify-between mb-8">
+        <div>
+          <div className="eyebrow mb-2">Admin · Compliance</div>
+          <h1 className="font-display text-4xl font-semibold">Industry Updates</h1>
+          <p className="text-sm mt-1" style={{ color: 'var(--gic-muted)' }}>AI monitors daily for regulatory and compliance changes relevant to your curriculum.</p>
+        </div>
+        <button onClick={runCheck} disabled={checking} className="btn-primary flex items-center gap-2">
+          <RefreshCw size={14} className={checking ? 'animate-spin' : ''}/> {checking ? 'Checking…' : 'Check now'}
+        </button>
+      </div>
+
+      {updates.length === 0 ? (
+        <div className="gic-card p-12 text-center">
+          <CheckCircle2 size={32} className="mx-auto mb-3" style={{ color: 'var(--gic-green)' }}/>
+          <div className="font-display text-xl font-semibold mb-1">All clear</div>
+          <p className="text-sm" style={{ color: 'var(--gic-muted)' }}>No pending industry updates. The AI checks daily at 8am.</p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {updates.map(u => (
+            <div key={u.id} className="gic-card p-5">
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="text-xs font-semibold px-2 py-0.5 rounded-full" style={{ background: (catColor[u.category]||'var(--gic-warm)')+'18', color: catColor[u.category]||'var(--gic-warm)' }}>{u.category}</span>
+                    <span className="text-xs" style={{ color: 'var(--gic-muted)' }}>{fmtRelative(u.created_at)}</span>
+                  </div>
+                  <div className="font-semibold mb-1">{u.title}</div>
+                  <p className="text-sm leading-relaxed" style={{ color: 'var(--gic-muted)' }}>{u.summary}</p>
+                  {u.relevance && <p className="text-xs mt-2 font-medium" style={{ color: 'var(--gic-blue)' }}>Affects: {u.relevance}</p>}
+                </div>
+                <button onClick={() => dismiss(u.id)} className="flex-shrink-0 p-1.5 rounded hover:bg-red-50" style={{ color: 'var(--gic-rose)' }} title="Dismiss"><X size={14}/></button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </main>
+  );
+}
+
+// ============================================================
+// CERTIFICATE VIEW — display and print/download certificate
+// ============================================================
+function CertificateView({ cert, onClose }) {
+  const print = () => {
+    const w = window.open('', '_blank');
+    w.document.write(`<!DOCTYPE html><html><head><title>Certificate</title>
+    <link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,600;1,6..72,400&family=Plus+Jakarta+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+      body { margin:0; padding:0; background:#fff; font-family:'Plus Jakarta Sans',sans-serif; }
+      .cert { width:900px; margin:40px auto; padding:60px 80px; border:3px solid #2D1FB1; position:relative; text-align:center; }
+      .cert::before { content:''; position:absolute; inset:8px; border:1px solid #2D1FB1; pointer-events:none; }
+      .org { font-size:13px; letter-spacing:.18em; text-transform:uppercase; color:#8A745E; margin-bottom:32px; }
+      .certifies { font-size:14px; color:#6B5B4A; margin-bottom:16px; }
+      .name { font-family:'Newsreader',serif; font-size:48px; font-style:italic; color:#0F1631; margin:0 0 16px; }
+      .program { font-family:'Newsreader',serif; font-size:22px; color:#2D1FB1; margin-bottom:32px; }
+      .details { font-size:13px; color:#6B5B4A; line-height:2; margin-bottom:40px; }
+      .score { display:inline-block; padding:8px 24px; border:1px solid #2D1FB1; border-radius:4px; font-size:13px; color:#2D1FB1; margin-bottom:40px; }
+      .footer { display:flex; justify-content:space-between; align-items:flex-end; padding-top:32px; border-top:1px solid #E5DFD3; }
+      .sig-line { width:180px; border-top:1px solid #0F1631; padding-top:8px; font-size:12px; color:#6B5B4A; text-align:center; }
+      .cert-num { font-size:10px; color:#8A745E; letter-spacing:.1em; }
+      @media print { body { -webkit-print-color-adjust:exact; } }
+    </style></head><body>
+    <div class="cert">
+      <div class="org">Global Investment Company</div>
+      <div class="certifies">This certifies that</div>
+      <div class="name">${cert.user_name}</div>
+      <div class="certifies">has successfully completed the</div>
+      <div class="program">Wealth Solutions Counselor Apprenticeship Program</div>
+      <div class="details">
+        DOL Registered Apprenticeship · RAPIDS 3007HY<br>
+        Thirty competencies across 32 curriculum modules<br>
+        Final Comprehensive Examination
+      </div>
+      <div class="score">Final Exam Score: ${cert.exam_score}%</div>
+      <div class="footer">
+        <div class="sig-line">Julius Jackson<br>Program Director</div>
+        <div style="text-align:center">
+          <div style="font-size:11px;color:#8A745E">Issued ${new Date(cert.issued_at).toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'})}</div>
+          <div class="cert-num">Certificate No. ${cert.certificate_number}</div>
+        </div>
+        <div class="sig-line">Cathy Jackson-Gent<br>Curriculum Approver</div>
+      </div>
+    </div>
+    <script>window.onload=()=>window.print();<\/script>
+    </body></html>`);
+    w.document.close();
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-6" style={{ background: 'rgba(15,22,49,0.8)' }}>
+      <div className="gic-card w-full max-w-lg p-8 text-center animate-fade-in">
+        <div className="w-20 h-20 mx-auto rounded-full flex items-center justify-center mb-4" style={{ background: 'rgba(45,31,177,0.08)', color: 'var(--gic-blue)' }}>
+          <Award size={36}/>
+        </div>
+        <div className="eyebrow mb-2">Apprenticeship Complete</div>
+        <h2 className="font-display text-3xl font-semibold mb-1">{cert.user_name}</h2>
+        <p className="text-sm mb-1" style={{ color: 'var(--gic-muted)' }}>Wealth Solutions Counselor · Global Investment Company</p>
+        <p className="text-sm mb-6" style={{ color: 'var(--gic-muted)' }}>Final Exam Score: <strong style={{ color: 'var(--gic-ink)' }}>{cert.exam_score}%</strong></p>
+        <p className="text-xs mb-6" style={{ color: 'var(--gic-warm)' }}>Certificate No. {cert.certificate_number}</p>
+        <p className="text-xs mb-6" style={{ color: 'var(--gic-muted)' }}>Issued {new Date(cert.issued_at).toLocaleDateString('en-US', { year:'numeric', month:'long', day:'numeric' })}</p>
+        <div className="flex gap-3 justify-center">
+          <button onClick={print} className="btn-primary flex items-center gap-2"><Download size={14}/> Print / Download PDF</button>
+          <button onClick={onClose} className="btn-ghost">Close</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================
 // MAIN APP
 // ============================================================
 function App({ profile, signOut }) {
-  const [view, setView]         = useState('dashboard'); // dashboard | admin | module | mentor | sponsors | apprentice | questions
+  const [view, setView]         = useState('dashboard'); // dashboard | admin | module | mentor | sponsors | apprentice | updates
   const [modules, setModules]   = useState([]);
   const [progress, setProgress] = useState([]);
   const [submissions, setSubmissions]               = useState([]);
@@ -3726,6 +4151,7 @@ function App({ profile, signOut }) {
   const [profileData, setProfileData]               = useState(profile);
   const [showProfile, setShowProfile]               = useState(false);
   const [showSiteSettings, setShowSiteSettings]     = useState(false);
+  const [earnedCert, setEarnedCert]                 = useState(null);
   const brandLogo = useBranding(profileData);
 
   // Load modules
@@ -3935,9 +4361,14 @@ function App({ profile, signOut }) {
             onOpenModule={handleOpen}
             onApprove={approveModule}
             onModuleUpdated={(updated) => {
-              setModules(prev => prev.map(m => m.id === updated.id ? updated : m));
+              setModules(prev => {
+                const exists = prev.find(m => m.id === updated.id);
+                if (exists) return prev.map(m => m.id === updated.id ? updated : m).sort((a,b) => a.module_number - b.module_number);
+                return [...prev, updated].sort((a,b) => a.module_number - b.module_number);
+              });
               setOpenModule(o => o?.id === updated.id ? updated : o);
             }}
+            onModuleDeleted={(id) => setModules(prev => prev.filter(m => m.id !== id))}
           />
         )}
         {view === 'mentor' && (
@@ -3966,6 +4397,9 @@ function App({ profile, signOut }) {
             onOpenModule={handleOpen}
             onViewSubmission={handleViewSubmission}
           />
+        )}
+        {view === 'updates' && (
+          <IndustryUpdates profile={profile} />
         )}
       </div>
 
@@ -4009,6 +4443,9 @@ function App({ profile, signOut }) {
           profile={profileData}
           onClose={() => setShowSiteSettings(false)}
         />
+      )}
+      {earnedCert && (
+        <CertificateView cert={earnedCert} onClose={() => setEarnedCert(null)} />
       )}
     </div>
   );
