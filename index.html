@@ -1673,7 +1673,7 @@ function QuizRunner({ mod, quiz, profile, onClose, onComplete }) {
 // ============================================================
 // ADMIN DASHBOARD
 // ============================================================
-function AdminDashboard({ modules, profile, onOpenModule, onApprove }) {
+function AdminDashboard({ modules, profile, onOpenModule, onApprove, onModuleUpdated }) {
   const isApprover = profile?.role === 'approver';
   const [filter, setFilter] = useState('all'); // all | draft | approved
   const [editingModule, setEditingModule] = useState(null);
@@ -1736,7 +1736,7 @@ function AdminDashboard({ modules, profile, onOpenModule, onApprove }) {
         <ModuleEditor
           mod={editingModule}
           onClose={() => setEditingModule(null)}
-          onSaved={(updated) => { setEditingModule(null); }}
+          onSaved={(updated) => { setEditingModule(null); onModuleUpdated && onModuleUpdated(updated); }}
         />
       )}
     </main>
@@ -3934,6 +3934,10 @@ function App({ profile, signOut }) {
             profile={profile}
             onOpenModule={handleOpen}
             onApprove={approveModule}
+            onModuleUpdated={(updated) => {
+              setModules(prev => prev.map(m => m.id === updated.id ? updated : m));
+              setOpenModule(o => o?.id === updated.id ? updated : o);
+            }}
           />
         )}
         {view === 'mentor' && (
