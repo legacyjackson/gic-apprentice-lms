@@ -4928,9 +4928,9 @@ function ProfileModal({ profile, onClose, onUpdated }) {
   const handleCropSave = async (blob) => {
     setCropFile(null);
     setUploading(true); setErr('');
-    const fileName = `${profile.id}-${Date.now()}.jpg`;
+    const fileName = `avatars/${profile.id}-${Date.now()}.jpg`;
     const { error } = await supabase.storage.from('media').upload(fileName, blob, { upsert: true, contentType: 'image/jpeg' });
-    if (error) { setErr('Upload failed: ' + error.message); setUploading(false); return; }
+    if (error) { setErr('Upload failed: ' + error.message + ' | bucket: media | path: ' + fileName); setUploading(false); return; }
     const { data: urlData } = supabase.storage.from('media').getPublicUrl(fileName);
     const url = urlData?.publicUrl;
     if (url) {
