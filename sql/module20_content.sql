@@ -203,4 +203,4 @@ update public.modules set
   }
   $jsonb$::jsonb,
   updated_at = now()
-where module_number = 20;
+where module_number = 21;
