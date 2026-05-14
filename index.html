@@ -202,6 +202,9 @@
   .quiz-option.correct { border-color: var(--gic-green); background: rgba(31,122,74,0.06); }
   .quiz-option.incorrect { border-color: var(--gic-rose); background: rgba(184,61,92,0.06); }
   .quiz-option:disabled { cursor: default; }
+
+  /* Extra z-index tier for crop overlay above modals */
+  .z-60 { z-index: 60; }
 </style>
 </head>
 <body>
@@ -228,7 +231,8 @@ import {
   ListChecks, MessageSquare, Bookmark, AlertTriangle,
   Mic, Square, Send, Building2, Video, Play, Pause, Upload,
   Plus, Edit3, Trash2, Copy, UserCheck, Users, KeySquare,
-  ClipboardCheck, RotateCcw, ExternalLink, Save
+  ClipboardCheck, RotateCcw, ExternalLink, Save,
+  Camera, Settings
 } from 'lucide-react';
 
 // ============================================================
@@ -660,7 +664,7 @@ function BrandMark() { return null; }
 // ============================================================
 // HEADER
 // ============================================================
-function Header({ profile, onSignOut, currentView, onNavigate, onOpenCoach, coachAvailable }) {
+function Header({ profile, onSignOut, currentView, onNavigate, onOpenCoach, coachAvailable, logo, onOpenProfile, onOpenSiteSettings }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const isAdmin  = profile?.role === 'admin' || profile?.role === 'approver';
   const isMentor = profile?.role === 'mentor';
@@ -670,7 +674,7 @@ function Header({ profile, onSignOut, currentView, onNavigate, onOpenCoach, coac
     <header className="border-b sticky top-0 z-30" style={{ borderColor: 'var(--gic-line)', background: 'rgba(250,247,242,0.92)', backdropFilter: 'blur(8px)' }}>
       <div className="max-w-7xl mx-auto px-6 lg:px-10 py-5 flex items-center justify-between">
         <button onClick={() => onNavigate('dashboard')} className="flex items-center gap-3 text-left">
-          <BrandMark size={32} />
+          {logo ? <img src={logo} alt="Logo" style={{width:32,height:32,objectFit:'contain',borderRadius:'50%'}} /> : null}
           <div>
             <div className="font-display text-lg font-semibold leading-none">Global Investment Company</div>
             <div className="text-[10px] tracking-[0.18em] uppercase mt-1" style={{ color: 'var(--gic-warm)' }}>Apprentice Program</div>
@@ -714,6 +718,12 @@ function Header({ profile, onSignOut, currentView, onNavigate, onOpenCoach, coac
               </button>
             </>
           )}
+          {profile?.email === 'julius@globalinvestmentcompanies.com' && (
+            <button onClick={() => onOpenSiteSettings && onOpenSiteSettings()}
+              className="btn-ghost flex items-center gap-1.5">
+              <Settings size={14}/> Site Settings
+            </button>
+          )}
         </nav>
 
         <div className="flex items-center gap-2">
@@ -728,10 +738,11 @@ function Header({ profile, onSignOut, currentView, onNavigate, onOpenCoach, coac
           )}
           <div className="relative">
             <button onClick={() => setMenuOpen(!menuOpen)} className="flex items-center gap-2.5 group">
-              <div className="w-9 h-9 rounded-full flex items-center justify-center text-sm font-semibold text-white"
-                   style={{ background: 'var(--gic-blue)' }}>
-                {initials}
-              </div>
+              {profile?.avatar_url
+                ? <img src={profile.avatar_url} alt={initials} className="w-9 h-9 rounded-full object-cover" />
+                : <div className="w-9 h-9 rounded-full flex items-center justify-center text-sm font-semibold text-white"
+                       style={{ background: 'var(--gic-blue)' }}>{initials}</div>
+              }
               <ChevronDown size={14} className="hidden md:block" style={{ color: 'var(--gic-muted)' }} />
             </button>
 
@@ -784,6 +795,10 @@ function Header({ profile, onSignOut, currentView, onNavigate, onOpenCoach, coac
                       </>
                     )}
                   </div>
+                  <button onClick={() => { setMenuOpen(false); onOpenProfile && onOpenProfile(); }}
+                          className="w-full text-left px-4 py-3 hover:bg-stone-50 flex items-center gap-2 text-sm">
+                    <UserIcon size={14}/> My Profile
+                  </button>
                   <button onClick={() => { setMenuOpen(false); onSignOut(); }}
                           className="w-full text-left px-4 py-3 hover:bg-stone-50 flex items-center gap-2 text-sm">
                     <LogOut size={14} />
@@ -2761,7 +2776,7 @@ function SponsorsAdmin({ profile }) {
 }
 
 function SponsorForm({ onSave, onClose }) {
-  const [form, setForm] = useState({ name: '', contact_name: '', contact_email: '', contact_phone: '', address: '', notes: '' });
+  const [form, setForm] = useState({ name: '', contact_name: '', contact_email: '', contact_phone: '', address: '', notes: '', brand_primary: '#2D1FB1', brand_secondary: '#1A1080', brand_logo_url: '' });
   const submit = (e) => { e.preventDefault(); if (form.name.trim()) onSave(form); };
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(15,22,49,0.6)', backdropFilter: 'blur(6px)' }}>
@@ -2796,6 +2811,29 @@ function SponsorForm({ onSave, onClose }) {
           <div>
             <label className="eyebrow block mb-2">Notes</label>
             <textarea className="gic-input min-h-[60px]" value={form.notes} onChange={e => setForm({...form, notes: e.target.value})}/>
+          </div>
+          <div className="border-t pt-3 mt-2" style={{borderColor:'var(--gic-line)'}}>
+            <div className="eyebrow mb-2">Brand Colors & Logo <span style={{fontWeight:'normal',color:'var(--gic-muted)'}}>— optional</span></div>
+            <div className="grid grid-cols-2 gap-3 mb-3">
+              <div>
+                <label className="eyebrow block mb-1" style={{fontSize:'9px'}}>Primary Color</label>
+                <div className="flex items-center gap-1">
+                  <input type="color" value={form.brand_primary} onChange={e=>setForm({...form,brand_primary:e.target.value})} style={{width:'32px',height:'32px',borderRadius:'6px',border:'none',padding:'2px',cursor:'pointer'}}/>
+                  <input value={form.brand_primary} onChange={e=>setForm({...form,brand_primary:e.target.value})} className="gic-input font-mono text-xs flex-1" />
+                </div>
+              </div>
+              <div>
+                <label className="eyebrow block mb-1" style={{fontSize:'9px'}}>Secondary Color</label>
+                <div className="flex items-center gap-1">
+                  <input type="color" value={form.brand_secondary} onChange={e=>setForm({...form,brand_secondary:e.target.value})} style={{width:'32px',height:'32px',borderRadius:'6px',border:'none',padding:'2px',cursor:'pointer'}}/>
+                  <input value={form.brand_secondary} onChange={e=>setForm({...form,brand_secondary:e.target.value})} className="gic-input font-mono text-xs flex-1" />
+                </div>
+              </div>
+            </div>
+            <div>
+              <label className="eyebrow block mb-1" style={{fontSize:'9px'}}>Logo URL</label>
+              <input className="gic-input" value={form.brand_logo_url} onChange={e=>setForm({...form,brand_logo_url:e.target.value})} placeholder="https://..." />
+            </div>
           </div>
           <div className="flex gap-3 pt-2">
             <button type="button" onClick={onClose} className="btn-secondary flex-1">Cancel</button>
@@ -3542,6 +3580,136 @@ function ModuleEditor({ mod, onClose, onSaved }) {
 }
 
 // ============================================================
+// SITE SETTINGS (admin only)
+// ============================================================
+function SiteSettings({ profile, onClose }) {
+  const [primary, setPrimary] = useState('#2D1FB1');
+  const [secondary, setSecondary] = useState('#1A1080');
+  const [logoUrl, setLogoUrl] = useState('');
+  const [orgName, setOrgName] = useState('Global Investment Company');
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [ok, setOk] = useState('');
+  const [err, setErr] = useState('');
+
+  useEffect(() => {
+    supabase.from('site_config').select('*').eq('id',1).single().then(({data}) => {
+      if (data) {
+        setPrimary(data.primary_color||'#2D1FB1');
+        setSecondary(data.secondary_color||'#1A1080');
+        setLogoUrl(data.logo_url||'');
+        setOrgName(data.org_name||'Global Investment Company');
+      }
+      setLoading(false);
+    });
+  }, []);
+
+  const save = async () => {
+    setSaving(true); setErr(''); setOk('');
+    const { error } = await supabase.from('site_config').upsert({
+      id: 1, primary_color: primary, secondary_color: secondary,
+      logo_url: logoUrl, org_name: orgName,
+      updated_by: profile.id, updated_at: new Date().toISOString()
+    });
+    setSaving(false);
+    if (error) { setErr(error.message); return; }
+    // Apply immediately
+    document.documentElement.style.setProperty('--gic-blue', primary);
+    document.documentElement.style.setProperty('--gic-blue-2', secondary);
+    setOk('Site settings saved. Reload the page to see all changes applied.');
+  };
+
+  const reset = () => { setPrimary('#2D1FB1'); setSecondary('#1A1080'); setLogoUrl(''); };
+
+  if (loading) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-start justify-center" style={{background:'rgba(15,22,49,0.6)',overflowY:'auto',paddingTop:'40px',paddingBottom:'40px'}}>
+      <div className="gic-card w-full max-w-lg mx-4 animate-fade-in">
+        <div className="flex items-center justify-between p-6 border-b" style={{borderColor:'var(--gic-line)'}}>
+          <div>
+            <div className="eyebrow mb-1">Super Admin</div>
+            <div className="font-display text-xl font-semibold">Site Settings</div>
+          </div>
+          <button onClick={onClose} className="btn-ghost"><X size={18}/></button>
+        </div>
+        <div className="p-6 space-y-5">
+          <div>
+            <label className="eyebrow block mb-2">Organization Name</label>
+            <input value={orgName} onChange={e=>setOrgName(e.target.value)} className="gic-input" />
+          </div>
+          <div>
+            <label className="eyebrow block mb-2">Logo URL <span style={{color:'var(--gic-muted)',fontWeight:'normal'}}>— paste any public image URL</span></label>
+            <input value={logoUrl} onChange={e=>setLogoUrl(e.target.value)} className="gic-input" placeholder="https://..." />
+            {logoUrl && <img src={logoUrl} alt="Logo preview" style={{marginTop:'8px',height:'48px',objectFit:'contain',borderRadius:'6px'}} onError={e=>e.target.style.display='none'} />}
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="eyebrow block mb-2">Primary Color</label>
+              <div className="flex items-center gap-2">
+                <input type="color" value={primary} onChange={e=>setPrimary(e.target.value)} style={{width:'40px',height:'40px',borderRadius:'8px',border:'none',cursor:'pointer',padding:'2px'}} />
+                <input value={primary} onChange={e=>setPrimary(e.target.value)} className="gic-input flex-1 font-mono text-sm" placeholder="#2D1FB1" />
+              </div>
+              <div className="mt-2 h-6 rounded" style={{background:primary}} />
+            </div>
+            <div>
+              <label className="eyebrow block mb-2">Secondary Color <span style={{color:'var(--gic-muted)',fontWeight:'normal'}}>(darker shade)</span></label>
+              <div className="flex items-center gap-2">
+                <input type="color" value={secondary} onChange={e=>setSecondary(e.target.value)} style={{width:'40px',height:'40px',borderRadius:'8px',border:'none',cursor:'pointer',padding:'2px'}} />
+                <input value={secondary} onChange={e=>setSecondary(e.target.value)} className="gic-input flex-1 font-mono text-sm" placeholder="#1A1080" />
+              </div>
+              <div className="mt-2 h-6 rounded" style={{background:secondary}} />
+            </div>
+          </div>
+          <div className="p-3 rounded text-xs" style={{background:'rgba(200,132,28,0.08)',color:'var(--gic-amber)'}}>
+            These colors apply globally to all users who don't have a sponsor-specific brand. Sponsors can override with their own colors.
+          </div>
+          {err && <div className="text-sm p-3 rounded" style={{background:'rgba(184,61,92,0.08)',color:'var(--gic-rose)'}}>{err}</div>}
+          {ok && <div className="text-sm p-3 rounded" style={{background:'rgba(31,122,74,0.08)',color:'var(--gic-green)'}}>{ok}</div>}
+        </div>
+        <div className="flex items-center justify-between p-6 border-t" style={{borderColor:'var(--gic-line)'}}>
+          <button onClick={reset} className="btn-ghost text-sm flex items-center gap-1.5"><RefreshCw size={13}/> Reset to defaults</button>
+          <button onClick={save} disabled={saving} className="btn-primary flex items-center gap-2"><Save size={14}/>{saving?'Saving…':'Save & apply'}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================
+// useBranding — fetches site_config / sponsor brand, applies CSS vars
+// ============================================================
+function useBranding(profile) {
+  const [logo, setLogo] = useState(null);
+
+  useEffect(() => {
+    if (!supabase || !profile) return;
+    let mounted = true;
+    (async () => {
+      // 1. Fetch global site config
+      const { data: cfg } = await supabase.from('site_config').select('*').eq('id', 1).single();
+      // 2. If user has a sponsor, that overrides global
+      let branding = cfg;
+      if (profile.sponsor_id) {
+        const { data: sp } = await supabase.from('employer_sponsors')
+          .select('brand_primary,brand_secondary,brand_logo_url,name')
+          .eq('id', profile.sponsor_id).single();
+        if (sp?.brand_primary) branding = { primary_color: sp.brand_primary, secondary_color: sp.brand_secondary, logo_url: sp.brand_logo_url };
+      }
+      if (!mounted) return;
+      if (branding?.primary_color) {
+        document.documentElement.style.setProperty('--gic-blue', branding.primary_color);
+        document.documentElement.style.setProperty('--gic-blue-2', branding.secondary_color || branding.primary_color);
+      }
+      if (branding?.logo_url) setLogo(branding.logo_url);
+    })();
+    return () => { mounted = false; };
+  }, [profile?.id, profile?.sponsor_id]);
+
+  return logo;
+}
+
+// ============================================================
 // MAIN APP
 // ============================================================
 function App({ profile, signOut }) {
@@ -3555,6 +3723,10 @@ function App({ profile, signOut }) {
   const [viewingSubmissionMod, setViewingSubmissionMod] = useState(null);
   const [coachOpen, setCoachOpen]                   = useState(false);
   const [loading, setLoading]   = useState(true);
+  const [profileData, setProfileData]               = useState(profile);
+  const [showProfile, setShowProfile]               = useState(false);
+  const [showSiteSettings, setShowSiteSettings]     = useState(false);
+  const brandLogo = useBranding(profileData);
 
   // Load modules
   useEffect(() => {
@@ -3732,12 +3904,15 @@ function App({ profile, signOut }) {
   return (
     <div className="min-h-screen flex flex-col">
       <Header
-        profile={profile}
+        profile={profileData}
         onSignOut={signOut}
         currentView={view}
         onNavigate={handleNav}
         onOpenCoach={() => setCoachOpen(true)}
         coachAvailable={true}
+        logo={brandLogo}
+        onOpenProfile={() => setShowProfile(true)}
+        onOpenSiteSettings={() => setShowSiteSettings(true)}
       />
 
       <div className="flex-1">
@@ -3814,10 +3989,324 @@ function App({ profile, signOut }) {
       <CoachDrawer
         open={coachOpen}
         onClose={() => setCoachOpen(false)}
-        profile={profile}
+        profile={profileData}
         lessonContext={coachContext}
         moduleTitle={openModule?.title}
       />
+      {showProfile && (
+        <ProfileModal
+          profile={profileData}
+          onClose={() => setShowProfile(false)}
+          onUpdated={updated => setProfileData(updated)}
+        />
+      )}
+      {showSiteSettings && (
+        <SiteSettings
+          profile={profileData}
+          onClose={() => setShowSiteSettings(false)}
+        />
+      )}
+    </div>
+  );
+}
+
+// ============================================================
+// AVATAR CROP — drag-to-reposition circular crop canvas
+// ============================================================
+function AvatarCrop({ file, onSave, onClose }) {
+  const canvasRef = useRef(null);
+  const imgRef = useRef(null);
+  const [scale, setScale] = useState(1);
+  const [offset, setOffset] = useState({x:0,y:0});
+  const [dragging, setDragging] = useState(false);
+  const [dragStart, setDragStart] = useState({x:0,y:0});
+  const SIZE = 240;
+
+  useEffect(() => {
+    const reader = new FileReader();
+    reader.onload = e => {
+      const img = new Image();
+      img.onload = () => {
+        imgRef.current = img;
+        const s = SIZE / Math.min(img.width, img.height);
+        setScale(s);
+        setOffset({ x: -(img.width*s - SIZE)/2, y: -(img.height*s - SIZE)/2 });
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  }, [file]);
+
+  useEffect(() => {
+    const img = imgRef.current;
+    const canvas = canvasRef.current;
+    if (!img || !canvas) return;
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, SIZE, SIZE);
+    // draw image
+    ctx.save();
+    ctx.beginPath(); ctx.arc(SIZE/2,SIZE/2,SIZE/2,0,Math.PI*2); ctx.clip();
+    ctx.drawImage(img, offset.x, offset.y, img.width*scale, img.height*scale);
+    ctx.restore();
+    // dim outside
+    ctx.fillStyle = 'rgba(0,0,0,0.45)';
+    ctx.fillRect(0,0,SIZE,SIZE);
+    ctx.save();
+    ctx.globalCompositeOperation = 'destination-out';
+    ctx.beginPath(); ctx.arc(SIZE/2,SIZE/2,SIZE/2,0,Math.PI*2); ctx.fill();
+    ctx.restore();
+    // redraw inside
+    ctx.save();
+    ctx.beginPath(); ctx.arc(SIZE/2,SIZE/2,SIZE/2,0,Math.PI*2); ctx.clip();
+    ctx.drawImage(img, offset.x, offset.y, img.width*scale, img.height*scale);
+    ctx.restore();
+    // ring
+    ctx.strokeStyle='white'; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.arc(SIZE/2,SIZE/2,SIZE/2-1,0,Math.PI*2); ctx.stroke();
+  }, [scale, offset]);
+
+  const onMouseDown = e => { setDragging(true); setDragStart({x:e.clientX-offset.x, y:e.clientY-offset.y}); };
+  const onMouseMove = e => { if(!dragging) return; setOffset({x:e.clientX-dragStart.x, y:e.clientY-dragStart.y}); };
+  const onMouseUp = () => setDragging(false);
+  const onTouchStart = e => { const t=e.touches[0]; setDragging(true); setDragStart({x:t.clientX-offset.x,y:t.clientY-offset.y}); };
+  const onTouchMove = e => { if(!dragging)return; const t=e.touches[0]; setOffset({x:t.clientX-dragStart.x,y:t.clientY-dragStart.y}); e.preventDefault(); };
+
+  const apply = () => {
+    const img = imgRef.current;
+    if (!img) return;
+    const out = document.createElement('canvas');
+    out.width=200; out.height=200;
+    const ctx=out.getContext('2d');
+    const r=200/SIZE;
+    ctx.beginPath(); ctx.arc(100,100,100,0,Math.PI*2); ctx.clip();
+    ctx.drawImage(img, offset.x*r, offset.y*r, img.width*scale*r, img.height*scale*r);
+    out.toBlob(blob=>onSave(blob), 'image/jpeg', 0.9);
+  };
+
+  return (
+    <div className="fixed inset-0 z-60 flex items-center justify-center p-4" style={{background:'rgba(15,22,49,0.85)'}}>
+      <div className="gic-card p-6 w-full max-w-xs">
+        <div className="font-display text-lg font-semibold mb-1">Crop photo</div>
+        <p className="text-xs mb-4" style={{color:'var(--gic-muted)'}}>Drag to reposition · Use slider to zoom</p>
+        <div className="flex justify-center mb-4">
+          <canvas ref={canvasRef} width={SIZE} height={SIZE}
+            style={{borderRadius:'50%',cursor:dragging?'grabbing':'grab',touchAction:'none',userSelect:'none'}}
+            onMouseDown={onMouseDown} onMouseMove={onMouseMove} onMouseUp={onMouseUp} onMouseLeave={onMouseUp}
+            onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onMouseUp} />
+        </div>
+        <div className="mb-4">
+          <label className="text-xs block mb-1" style={{color:'var(--gic-muted)'}}>Zoom</label>
+          <input type="range" min={0.1} max={5} step={0.01} value={scale} onChange={e=>setScale(parseFloat(e.target.value))} className="w-full" />
+        </div>
+        <div className="flex gap-3">
+          <button onClick={onClose} className="btn-ghost flex-1">Cancel</button>
+          <button onClick={apply} className="btn-primary flex-1">Save photo</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================
+// PROFILE MODAL — edit name, avatar, password
+// ============================================================
+function ProfileModal({ profile, onClose, onUpdated }) {
+  const [tab, setTab] = useState('profile'); // profile | password
+  const [fullName, setFullName] = useState(profile.full_name || '');
+  const [cropFile, setCropFile] = useState(null);
+  const [uploading, setUploading] = useState(false);
+  const [pw, setPw] = useState('');
+  const [pw2, setPw2] = useState('');
+  const [showPw, setShowPw] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState('');
+  const [ok, setOk] = useState('');
+  const [sponsor, setSponsor] = useState(null);
+
+  useEffect(() => {
+    if (!supabase || !profile.sponsor_id) return;
+    supabase.from('employer_sponsors').select('name').eq('id', profile.sponsor_id).single()
+      .then(({data}) => { if (data) setSponsor(data.name); });
+  }, [profile.sponsor_id]);
+
+  const saveProfile = async () => {
+    setSaving(true); setErr(''); setOk('');
+    const { error } = await supabase.from('profiles').update({ full_name: fullName, updated_at: new Date().toISOString() }).eq('id', profile.id);
+    setSaving(false);
+    if (error) { setErr(error.message); return; }
+    setOk('Profile updated.');
+    onUpdated({ ...profile, full_name: fullName });
+  };
+
+  const handleAvatarSelect = (e) => {
+    const file = e.target.files?.[0];
+    if (file) setCropFile(file);
+  };
+
+  const handleCropSave = async (blob) => {
+    setCropFile(null);
+    setUploading(true); setErr('');
+    const fileName = `${profile.id}-${Date.now()}.jpg`;
+    const { error } = await supabase.storage.from('avatars').upload(fileName, blob, { upsert: true, contentType: 'image/jpeg' });
+    if (error) { setErr('Upload failed: ' + error.message); setUploading(false); return; }
+    const { data: urlData } = supabase.storage.from('avatars').getPublicUrl(fileName);
+    const url = urlData?.publicUrl;
+    if (url) {
+      await supabase.from('profiles').update({ avatar_url: url }).eq('id', profile.id);
+      onUpdated({ ...profile, avatar_url: url });
+    }
+    setUploading(false);
+    setOk('Profile photo updated.');
+  };
+
+  const changePassword = async (e) => {
+    e.preventDefault();
+    setErr(''); setOk('');
+    if (pw.length < 8) { setErr('Password must be at least 8 characters.'); return; }
+    if (pw !== pw2) { setErr('Passwords do not match.'); return; }
+    setSaving(true);
+    const { error } = await supabase.auth.updateUser({ password: pw });
+    setSaving(false);
+    if (error) { setErr(error.message); return; }
+    setPw(''); setPw2('');
+    setOk('Password changed successfully.');
+  };
+
+  return (
+    <>
+      <div className="fixed inset-0 z-50 flex items-start justify-center" style={{background:'rgba(15,22,49,0.6)',overflowY:'auto',paddingTop:'40px',paddingBottom:'40px'}}>
+        <div className="gic-card w-full max-w-md mx-4 animate-fade-in">
+          <div className="flex items-center justify-between p-6 border-b" style={{borderColor:'var(--gic-line)'}}>
+            <div className="font-display text-xl font-semibold">My Profile</div>
+            <button onClick={onClose} className="btn-ghost"><X size={18}/></button>
+          </div>
+
+          <div className="flex border-b" style={{borderColor:'var(--gic-line)'}}>
+            {[['profile','Profile'],['password','Password']].map(([id,label]) => (
+              <button key={id} onClick={()=>{setErr('');setOk('');setTab(id);}} className="px-6 py-3 text-sm font-medium"
+                style={{borderBottom:tab===id?'2px solid var(--gic-blue)':'2px solid transparent',
+                        color:tab===id?'var(--gic-blue)':'var(--gic-muted)'}}>
+                {label}
+              </button>
+            ))}
+          </div>
+
+          <div className="p-6 space-y-5">
+            {tab === 'profile' && (
+              <>
+                {/* Avatar */}
+                <div className="flex items-center gap-4">
+                  <div className="relative">
+                    {profile.avatar_url
+                      ? <img src={profile.avatar_url} alt="" className="w-16 h-16 rounded-full object-cover" />
+                      : <div className="w-16 h-16 rounded-full flex items-center justify-center text-xl font-semibold text-white" style={{background:'var(--gic-blue)'}}>{(profile.full_name||profile.email||'?')[0].toUpperCase()}</div>
+                    }
+                    <label className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full flex items-center justify-center cursor-pointer" style={{background:'var(--gic-blue)',color:'white'}}>
+                      <Camera size={12}/>
+                      <input type="file" accept="image/*" className="sr-only" onChange={handleAvatarSelect} />
+                    </label>
+                  </div>
+                  <div>
+                    <div className="font-semibold">{profile.full_name || profile.email}</div>
+                    <div className="text-xs mt-0.5" style={{color:'var(--gic-muted)'}}>{profile.email}</div>
+                    {sponsor && <div className="text-xs mt-1 font-medium" style={{color:'var(--gic-blue)'}}>Sponsored by {sponsor}</div>}
+                    {uploading && <div className="text-xs mt-1" style={{color:'var(--gic-muted)'}}>Uploading photo…</div>}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="eyebrow block mb-2">Full Name</label>
+                  <input value={fullName} onChange={e=>setFullName(e.target.value)} className="gic-input" />
+                </div>
+
+                <div className="p-3 rounded-lg text-sm" style={{background:'rgba(45,31,177,0.04)'}}>
+                  <div className="font-semibold mb-0.5" style={{color:'var(--gic-blue)'}}>Role</div>
+                  <div style={{color:'var(--gic-ink)'}}>{profile.role === 'approver' ? 'Curriculum Approver' : profile.role === 'admin' ? 'Administrator' : profile.role === 'mentor' ? 'Mentor' : 'Apprentice'}</div>
+                </div>
+
+                {err && <div className="text-sm p-3 rounded" style={{background:'rgba(184,61,92,0.08)',color:'var(--gic-rose)'}}>{err}</div>}
+                {ok && <div className="text-sm p-3 rounded" style={{background:'rgba(31,122,74,0.08)',color:'var(--gic-green)'}}>{ok}</div>}
+                <button onClick={saveProfile} disabled={saving} className="btn-primary w-full">{saving?'Saving…':'Save changes'}</button>
+              </>
+            )}
+
+            {tab === 'password' && (
+              <form onSubmit={changePassword} className="space-y-4">
+                <div>
+                  <label className="eyebrow block mb-2">New password</label>
+                  <div className="relative">
+                    <input type={showPw?'text':'password'} value={pw} onChange={e=>setPw(e.target.value)} className="gic-input pr-10" placeholder="At least 8 characters" required />
+                    <button type="button" onClick={()=>setShowPw(!showPw)} className="absolute right-3 top-1/2 -translate-y-1/2" style={{color:'var(--gic-warm)'}}>
+                      {showPw ? <EyeOff size={15}/> : <Eye size={15}/>}
+                    </button>
+                  </div>
+                </div>
+                <div>
+                  <label className="eyebrow block mb-2">Confirm password</label>
+                  <input type={showPw?'text':'password'} value={pw2} onChange={e=>setPw2(e.target.value)} className="gic-input" placeholder="Repeat password" required />
+                </div>
+                {err && <div className="text-sm p-3 rounded" style={{background:'rgba(184,61,92,0.08)',color:'var(--gic-rose)'}}>{err}</div>}
+                {ok && <div className="text-sm p-3 rounded" style={{background:'rgba(31,122,74,0.08)',color:'var(--gic-green)'}}>{ok}</div>}
+                <button type="submit" disabled={saving} className="btn-primary w-full">{saving?'Changing password…':'Change password'}</button>
+              </form>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {cropFile && <AvatarCrop file={cropFile} onSave={handleCropSave} onClose={()=>setCropFile(null)} />}
+    </>
+  );
+}
+
+// ============================================================
+// FORCE PASSWORD CHANGE — shown when must_change_password flag is set
+// ============================================================
+function ForcePasswordChange({ profile, onDone }) {
+  const [pw, setPw] = useState('');
+  const [pw2, setPw2] = useState('');
+  const [show, setShow] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+
+  const submit = async (e) => {
+    e.preventDefault();
+    setErr('');
+    if (pw.length < 8) { setErr('Password must be at least 8 characters.'); return; }
+    if (pw !== pw2) { setErr('Passwords do not match.'); return; }
+    setBusy(true);
+    const { error } = await supabase.auth.updateUser({ password: pw });
+    if (error) { setErr(error.message); setBusy(false); return; }
+    // Clear the flag
+    await supabase.from('profiles').update({ metadata: { ...(profile.metadata||{}), must_change_password: false } }).eq('id', profile.id);
+    setBusy(false);
+    onDone();
+  };
+
+  return (
+    <div className="min-h-screen flex items-center justify-center p-6" style={{background:'var(--gic-bone)'}}>
+      <div className="gic-card p-8 w-full max-w-md">
+        <div className="eyebrow mb-3">Account Setup</div>
+        <h1 className="font-display text-3xl font-semibold mb-2">Set your password</h1>
+        <p className="text-sm mb-6" style={{color:'var(--gic-muted)'}}>Welcome! Before you get started, please set a secure password for your account.</p>
+        <form onSubmit={submit} className="space-y-4">
+          <div>
+            <label className="eyebrow block mb-2">New password</label>
+            <div className="relative">
+              <input type={show?'text':'password'} value={pw} onChange={e=>setPw(e.target.value)} className="gic-input pr-10" placeholder="At least 8 characters" required />
+              <button type="button" onClick={()=>setShow(!show)} className="absolute right-3 top-1/2 -translate-y-1/2" style={{color:'var(--gic-warm)'}}>
+                {show ? <EyeOff size={15}/> : <Eye size={15}/>}
+              </button>
+            </div>
+          </div>
+          <div>
+            <label className="eyebrow block mb-2">Confirm password</label>
+            <input type={show?'text':'password'} value={pw2} onChange={e=>setPw2(e.target.value)} className="gic-input" placeholder="Repeat password" required />
+          </div>
+          {err && <div className="text-sm p-3 rounded" style={{background:'rgba(184,61,92,0.08)',color:'var(--gic-rose)'}}>{err}</div>}
+          <button type="submit" disabled={busy} className="btn-primary w-full">{busy?'Saving…':'Set password & continue'}</button>
+        </form>
+      </div>
     </div>
   );
 }
@@ -3832,6 +4321,10 @@ function AuthGate() {
   if (loading)        return <LoadingScreen />;
   if (!session)       return <LoginScreen />;
   if (!profile)       return <LoadingScreen />;
+
+  if (profile.metadata?.must_change_password) {
+    return <ForcePasswordChange profile={profile} onDone={() => window.location.reload()} />;
+  }
 
   return <App profile={profile} signOut={signOut} />;
 }
