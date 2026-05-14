@@ -2957,6 +2957,7 @@ function SponsorForm({ onSave, onClose }) {
   };
   const submit = (e) => { e.preventDefault(); if (form.name.trim()) onSave(form); };
   return (
+    <>
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(15,22,49,0.6)', backdropFilter: 'blur(6px)' }}>
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg">
         <div className="p-5 border-b flex items-center justify-between" style={{ borderColor: 'var(--gic-line)' }}>
@@ -3029,6 +3030,7 @@ function SponsorForm({ onSave, onClose }) {
       </div>
     </div>
     {sponsorCropFile && <LogoCrop file={sponsorCropFile} onSave={handleSponsorLogoCrop} onClose={() => setSponsorCropFile(null)} />}
+    </>
   );
 }
 
@@ -4847,13 +4849,6 @@ function LogoCrop({ file, onSave, onClose }) {
           <input type="checkbox" checked={bgWhite} onChange={e => setBgWhite(e.target.checked)} />
           <span style={{ color: 'var(--gic-muted)' }}>Add white background (for transparent PNGs)</span>
         </label>
-
-        {/* Live preview of how logo appears in the header */}
-        <div className="mb-4 p-3 rounded-lg border flex items-center gap-2" style={{ borderColor: 'var(--gic-line)', background: 'var(--gic-bone)' }}>
-          <canvas ref={null} width={32} height={32}
-            style={{ borderRadius: '6px', border: '1px solid var(--gic-line)', background: '#fff', display: 'none' }} />
-          <span className="text-xs" style={{ color: 'var(--gic-muted)' }}>Preview: will auto-size to fit header and footer</span>
-        </div>
 
         <div className="flex gap-3">
           <button onClick={onClose} className="btn-ghost flex-1">Cancel</button>
