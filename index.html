@@ -4818,23 +4818,14 @@ function LogoCrop({ file, onSave, onClose }) {
     const canvas = canvasRef.current;
     if (!img || !canvas) return;
     const ctx = canvas.getContext('2d');
+    // Clear to fully transparent — CSS checkerboard background shows through
     ctx.clearRect(0, 0, SIZE, SIZE);
-    // Checkerboard background to show transparency
-    if (!bgWhite) {
-      const sq = 12;
-      for (let y = 0; y < SIZE; y += sq)
-        for (let x = 0; x < SIZE; x += sq)
-          ctx.fillStyle = (Math.floor(x/sq) + Math.floor(y/sq)) % 2 === 0 ? '#e5e7eb' : '#f9fafb';
-      for (let y = 0; y < SIZE; y += sq)
-        for (let x = 0; x < SIZE; x += sq) {
-          ctx.fillStyle = (Math.floor(x/sq) + Math.floor(y/sq)) % 2 === 0 ? '#e5e7eb' : '#f9fafb';
-          ctx.fillRect(x, y, sq, sq);
-        }
-    } else {
+    // Optional white fill if user requested it
+    if (bgWhite) {
       ctx.fillStyle = '#ffffff';
       ctx.fillRect(0, 0, SIZE, SIZE);
     }
-    // Draw image
+    // Draw the image — transparent areas remain transparent, showing CSS checkerboard
     ctx.drawImage(img, offset.x, offset.y, img.width * scale, img.height * scale);
     // Border
     ctx.strokeStyle = '#2D1FB1';
@@ -4850,11 +4841,15 @@ function LogoCrop({ file, onSave, onClose }) {
 
   const apply = () => {
     const out = document.createElement('canvas');
-    // Export at 2× for crispness
     out.width = 400; out.height = 400;
     const ctx = out.getContext('2d');
+    // Explicitly clear to transparent — prevents any black fill
+    ctx.clearRect(0, 0, 400, 400);
+    if (bgWhite) {
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, 400, 400);
+    }
     const r = 400 / SIZE;
-    if (bgWhite) { ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, 400, 400); }
     ctx.drawImage(imgRef.current, offset.x * r, offset.y * r, imgRef.current.width * scale * r, imgRef.current.height * scale * r);
     out.toBlob(blob => onSave(blob), 'image/png');
   };
@@ -4867,7 +4862,12 @@ function LogoCrop({ file, onSave, onClose }) {
 
         <div className="flex justify-center mb-3">
           <canvas ref={canvasRef} width={SIZE} height={SIZE}
-            style={{ borderRadius: '8px', cursor: dragging ? 'grabbing' : 'grab', touchAction: 'none', userSelect: 'none', display: 'block' }}
+            style={{
+              borderRadius: '8px', cursor: dragging ? 'grabbing' : 'grab',
+              touchAction: 'none', userSelect: 'none', display: 'block',
+              // CSS checkerboard — shows through transparent PNG areas, never black
+              background: 'repeating-conic-gradient(#e5e7eb 0% 25%, #ffffff 0% 50%) 0 0 / 20px 20px'
+            }}
             onMouseDown={onMouseDown} onMouseMove={onMouseMove} onMouseUp={onMouseUp} onMouseLeave={onMouseUp}
             onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onMouseUp} />
         </div>
@@ -4880,7 +4880,7 @@ function LogoCrop({ file, onSave, onClose }) {
 
         <label className="flex items-center gap-2 text-xs mb-4 cursor-pointer">
           <input type="checkbox" checked={bgWhite} onChange={e => setBgWhite(e.target.checked)} />
-          <span style={{ color: 'var(--gic-muted)' }}>Add white background (for transparent PNGs)</span>
+          <span style={{ color: 'var(--gic-muted)' }}>Fill background white <span style={{opacity:0.6}}>(leave unchecked to keep transparent)</span></span>
         </label>
 
         <div className="flex gap-3">
