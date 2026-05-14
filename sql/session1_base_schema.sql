@@ -67,7 +67,21 @@ create trigger profiles_set_updated_at
   for each row execute function public.tg_set_updated_at();
 
 -- ----------------------------------------------------------------------------
--- 4. profiles RLS
+-- 4a. Role helper — SECURITY DEFINER bypasses RLS so policies can safely
+--     read the caller's own profile row without triggering recursion.
+-- ----------------------------------------------------------------------------
+create or replace function public.get_my_role()
+returns text
+language sql
+security definer
+stable
+set search_path = public
+as $$
+  select role::text from public.profiles where id = auth.uid();
+$$;
+
+-- ----------------------------------------------------------------------------
+-- 4b. profiles RLS
 -- ----------------------------------------------------------------------------
 alter table public.profiles enable row level security;
 
@@ -80,11 +94,7 @@ drop policy if exists "profiles_admin_read_all" on public.profiles;
 create policy "profiles_admin_read_all"
   on public.profiles for select
   using (
-    exists (
-      select 1 from public.profiles p
-      where p.id = auth.uid()
-        and p.role in ('admin', 'approver', 'mentor')
-    )
+    public.get_my_role() in ('admin', 'approver', 'mentor')
   );
 
 drop policy if exists "profiles_self_update" on public.profiles;
@@ -96,11 +106,7 @@ drop policy if exists "profiles_admin_update" on public.profiles;
 create policy "profiles_admin_update"
   on public.profiles for update
   using (
-    exists (
-      select 1 from public.profiles p
-      where p.id = auth.uid()
-        and p.role in ('admin', 'approver')
-    )
+    public.get_my_role() in ('admin', 'approver')
   );
 
 -- ----------------------------------------------------------------------------
@@ -178,11 +184,7 @@ drop policy if exists "modules_admin_write" on public.modules;
 create policy "modules_admin_write"
   on public.modules for all
   using (
-    exists (
-      select 1 from public.profiles p
-      where p.id = auth.uid()
-        and p.role in ('admin', 'approver')
-    )
+    public.get_my_role() in ('admin', 'approver')
   );
 
 -- ----------------------------------------------------------------------------
@@ -228,11 +230,7 @@ create policy "progress_own_read"
   on public.module_progress for select
   using (
     user_id = auth.uid()
-    or exists (
-      select 1 from public.profiles p
-      where p.id = auth.uid()
-        and p.role in ('admin', 'approver', 'mentor')
-    )
+    or public.get_my_role() in ('admin', 'approver', 'mentor')
   );
 
 drop policy if exists "progress_own_write" on public.module_progress;
