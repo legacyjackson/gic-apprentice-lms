@@ -228,7 +228,7 @@ import {
   ListChecks, MessageSquare, Bookmark, AlertTriangle,
   Mic, Square, Send, Building2, Video, Play, Pause, Upload,
   Plus, Edit3, Trash2, Copy, UserCheck, Users, KeySquare,
-  ClipboardCheck, RotateCcw, ExternalLink
+  ClipboardCheck, RotateCcw, ExternalLink, Save
 } from 'lucide-react';
 
 // ============================================================
@@ -683,6 +683,13 @@ function Header({ profile, onSignOut, currentView, onNavigate, onOpenCoach, coac
                   style={currentView === 'dashboard' ? { color: 'var(--gic-blue)' } : {}}>
             My Modules
           </button>
+          {!isAdmin && !isMentor && (
+            <button onClick={() => onNavigate('apprentice')}
+                    className="btn-ghost"
+                    style={currentView === 'apprentice' ? { color: 'var(--gic-blue)' } : {}}>
+              My Progress
+            </button>
+          )}
           {(isMentor || isAdmin) && (
             <button onClick={() => onNavigate('mentor')}
                     className="btn-ghost flex items-center gap-1.5"
@@ -752,6 +759,12 @@ function Header({ profile, onSignOut, currentView, onNavigate, onOpenCoach, coac
                   </div>
                   {/* Mobile-only nav */}
                   <div className="md:hidden border-b" style={{ borderColor: 'var(--gic-line)' }}>
+                    {!isAdmin && !isMentor && (
+                      <button onClick={() => { setMenuOpen(false); onNavigate('apprentice'); }}
+                              className="w-full text-left px-4 py-2.5 hover:bg-stone-50 flex items-center gap-2 text-sm">
+                        <Target size={14} /> My Progress
+                      </button>
+                    )}
                     {(isMentor || isAdmin) && (
                       <button onClick={() => { setMenuOpen(false); onNavigate('mentor'); }}
                               className="w-full text-left px-4 py-2.5 hover:bg-stone-50 flex items-center gap-2 text-sm">
@@ -930,7 +943,7 @@ function ApprenticeDashboard({ modules, progress, profile, onOpenModule }) {
           The work of an advisor begins with <em>understanding.</em>
         </h1>
         <p className="text-lg leading-relaxed max-w-2xl" style={{ color: 'var(--gic-muted)' }}>
-          Your apprenticeship is structured around thirty competencies — drawn from our DOL-registered work process. Move through them at your pace; some live in the classroom, others on the job.
+          You're building the knowledge, skills, and habits of a professional Wealth Solutions Counselor. Complete each module at your own pace, pass the assessments, and log your on-the-job practice hours to demonstrate competency.
         </p>
       </section>
 
@@ -950,7 +963,7 @@ function ApprenticeDashboard({ modules, progress, profile, onOpenModule }) {
       <ModuleSection
         eyebrow="Core Instruction · 144 Related Instruction Hours"
         title="Foundations"
-        subtitle="The shared body of knowledge every Wealth Solutions Counselor draws from."
+        subtitle="Start here. These modules build the financial vocabulary, planning frameworks, and client skills you'll use in every client engagement."
         modules={core.filter(m => isAdmin || m.status === 'approved')}
         progressBy={progressBy}
         onOpen={onOpenModule}
@@ -1294,12 +1307,18 @@ function ModuleView({ module: mod, progress, profile, onBack, onProgressUpdate, 
         <div className="mb-2 flex items-center gap-3">
           <div className="eyebrow">Lesson {String(currentLesson + 1).padStart(2, '0')} of {lessons.length}</div>
           {lesson.read_time && <span className="text-xs" style={{ color: 'var(--gic-warm)' }}>· {lesson.read_time}</span>}
+          {lesson.watch_time && <span className="text-xs" style={{ color: 'var(--gic-warm)' }}>· ▶ {lesson.watch_time} watch</span>}
+          {lesson.listen_time && <span className="text-xs" style={{ color: 'var(--gic-warm)' }}>· 🎧 {lesson.listen_time} listen</span>}
         </div>
         <h1 className="font-display text-4xl font-semibold leading-tight mb-8">{lesson.title}</h1>
+
+        <ReadAlongBar blocks={lesson.blocks || []} />
 
         <div className="prose-gic">
           {(lesson.blocks || []).map((block, i) => <LessonBlock key={i} block={block} />)}
         </div>
+
+        <AskQuestionButton profile={profile} moduleNumber={mod.module_number} lessonIndex={currentLesson} lessonTitle={lesson.title} />
 
         {/* Nav */}
         <div className="mt-16 pt-8 border-t flex items-center justify-between" style={{ borderColor: 'var(--gic-line)' }}>
@@ -1434,6 +1453,46 @@ function LessonBlock({ block }) {
       );
     case 'divider':
       return <div className="gic-rule my-12"><span className="font-display italic text-sm">§</span></div>;
+    case 'video':
+      return (
+        <div className="my-8">
+          {block.title && <div className="eyebrow mb-2">{block.title}</div>}
+          {block.watch_time && <div className="text-xs mb-2" style={{color:'var(--gic-warm)'}}>▶ {block.watch_time} watch</div>}
+          {block.url && (
+            block.url.includes('youtube.com') || block.url.includes('youtu.be') || block.url.includes('vimeo.com')
+              ? <div style={{position:'relative',paddingBottom:'56.25%',height:0,overflow:'hidden',borderRadius:'8px'}}>
+                  <iframe src={
+                    block.url.includes('youtu.be')
+                      ? 'https://www.youtube.com/embed/' + block.url.split('youtu.be/')[1]?.split('?')[0]
+                      : block.url.includes('watch?v=')
+                      ? 'https://www.youtube.com/embed/' + block.url.split('watch?v=')[1]?.split('&')[0]
+                      : block.url.replace('vimeo.com/','player.vimeo.com/video/')
+                  } style={{position:'absolute',top:0,left:0,width:'100%',height:'100%'}}
+                    frameBorder="0" allowFullScreen title={block.title||'Video'} />
+                </div>
+              : <video src={block.url} controls style={{width:'100%',borderRadius:'8px'}} />
+          )}
+          {block.caption && <p className="text-xs mt-2" style={{color:'var(--gic-muted)'}}>{block.caption}</p>}
+        </div>
+      );
+    case 'image':
+      return (
+        <div className="my-8">
+          {block.url && <img src={block.url} alt={block.caption||block.title||''} style={{width:'100%',borderRadius:'8px',objectFit:'cover'}} />}
+          {block.caption && <p className="text-xs mt-2 text-center" style={{color:'var(--gic-muted)'}}>{block.caption}</p>}
+        </div>
+      );
+    case 'audio':
+      return (
+        <div className="my-6 p-4 border rounded-lg flex items-center gap-4" style={{borderColor:'var(--gic-line)'}}>
+          <div style={{color:'var(--gic-blue)'}}>🎧</div>
+          <div className="flex-1">
+            {block.title && <div className="font-semibold text-sm mb-1">{block.title}</div>}
+            {block.listen_time && <div className="text-xs mb-2" style={{color:'var(--gic-warm)'}}>{block.listen_time} listen</div>}
+            {block.url && <audio src={block.url} controls style={{width:'100%'}} />}
+          </div>
+        </div>
+      );
     default:
       return null;
   }
@@ -1602,6 +1661,7 @@ function QuizRunner({ mod, quiz, profile, onClose, onComplete }) {
 function AdminDashboard({ modules, profile, onOpenModule, onApprove }) {
   const isApprover = profile?.role === 'approver';
   const [filter, setFilter] = useState('all'); // all | draft | approved
+  const [editingModule, setEditingModule] = useState(null);
 
   const filtered = modules.filter(m => filter === 'all' ? true : m.status === filter);
   const draftCount = modules.filter(m => m.status !== 'approved').length;
@@ -1648,7 +1708,7 @@ function AdminDashboard({ modules, profile, onOpenModule, onApprove }) {
 
       <div className="gic-card divide-y" style={{ borderColor: 'var(--gic-line)' }}>
         {filtered.map(m => (
-          <AdminModuleRow key={m.id} module={m} onOpen={onOpenModule} onApprove={onApprove} canApprove={isApprover} />
+          <AdminModuleRow key={m.id} module={m} onOpen={onOpenModule} onApprove={onApprove} onEdit={setEditingModule} canApprove={isApprover} />
         ))}
         {filtered.length === 0 && (
           <div className="p-10 text-center text-sm" style={{ color: 'var(--gic-muted)' }}>
@@ -1656,11 +1716,19 @@ function AdminDashboard({ modules, profile, onOpenModule, onApprove }) {
           </div>
         )}
       </div>
+
+      {editingModule && (
+        <ModuleEditor
+          mod={editingModule}
+          onClose={() => setEditingModule(null)}
+          onSaved={(updated) => { setEditingModule(null); }}
+        />
+      )}
     </main>
   );
 }
 
-function AdminModuleRow({ module: mod, onOpen, onApprove, canApprove }) {
+function AdminModuleRow({ module: mod, onOpen, onApprove, onEdit, canApprove }) {
   const Icon = moduleIcon(mod.module_number);
   const band = competencyColor(mod.module_number);
   const palette = COLOR_BANDS[band];
@@ -1695,6 +1763,9 @@ function AdminModuleRow({ module: mod, onOpen, onApprove, canApprove }) {
             <Clock size={11} />In Development
           </span>
         )}
+        <button onClick={e => { e.stopPropagation(); onEdit(mod); }} className="btn-ghost flex items-center gap-1.5 text-sm" style={{ color: 'var(--gic-blue)' }}>
+          <Edit3 size={13}/> Edit
+        </button>
         <button onClick={() => onOpen(mod)} className="btn-ghost text-sm">
           {isApproved ? 'View' : 'Review'} →
         </button>
@@ -2279,13 +2350,20 @@ function CoachDrawer({ open, onClose, profile, lessonContext, moduleTitle }) {
 }
 
 // ============================================================
-// MENTOR DASHBOARD — lists submissions to review
+// MENTOR DASHBOARD — lists submissions to review + questions tab
 // ============================================================
 function MentorDashboard({ profile, modules, onViewSubmission }) {
+  const [activeTab, setActiveTab] = useState('submissions'); // submissions | questions
   const [submissions, setSubmissions] = useState([]);
   const [profilesById, setProfilesById] = useState({});
   const [filter, setFilter] = useState('pending'); // pending | all
   const [loading, setLoading] = useState(true);
+  // Questions tab state
+  const [questions, setQuestions] = useState([]);
+  const [questionsLoading, setQuestionsLoading] = useState(false);
+  const [answerTexts, setAnswerTexts] = useState({}); // question_id -> text
+  const [answerSending, setAnswerSending] = useState({}); // question_id -> bool
+  const [qProfilesById, setQProfilesById] = useState({});
 
   useEffect(() => {
     if (!profile) return;
@@ -2327,6 +2405,54 @@ function MentorDashboard({ profile, modules, onViewSubmission }) {
     return () => { mounted = false; supabase.removeChannel(channel); };
   }, [profile?.id, profile?.role]);
 
+  // Load questions when tab becomes active
+  useEffect(() => {
+    if (activeTab !== 'questions' || !supabase) return;
+    let mounted = true;
+    setQuestionsLoading(true);
+    (async () => {
+      const { data: qs } = await supabase
+        .from('questions')
+        .select('*')
+        .order('created_at', { ascending: false });
+      if (!mounted) return;
+      setQuestions(qs || []);
+      // Fetch asker profiles
+      const ids = Array.from(new Set((qs||[]).map(q => q.asker_id)));
+      if (ids.length > 0) {
+        const { data: pp } = await supabase.from('profiles').select('id,full_name,email').in('id', ids);
+        const map = {}; (pp||[]).forEach(p => { map[p.id] = p; });
+        if (mounted) setQProfilesById(map);
+      }
+      if (mounted) setQuestionsLoading(false);
+    })();
+    return () => { mounted = false; };
+  }, [activeTab]);
+
+  const sendAnswer = async (q) => {
+    const text = (answerTexts[q.id] || '').trim();
+    if (!text || !supabase) return;
+    setAnswerSending(prev => ({ ...prev, [q.id]: true }));
+    const { error } = await supabase.from('question_answers').insert({
+      question_id: q.id,
+      responder_id: profile.id,
+      responder_name: profile.full_name || profile.email || 'Mentor',
+      answer_text: text
+    });
+    if (!error) {
+      await supabase.from('questions').update({ status: 'resolved', updated_at: new Date().toISOString() }).eq('id', q.id);
+      setQuestions(prev => prev.map(x => x.id === q.id ? { ...x, status: 'resolved' } : x));
+      setAnswerTexts(prev => ({ ...prev, [q.id]: '' }));
+    }
+    setAnswerSending(prev => ({ ...prev, [q.id]: false }));
+  };
+
+  const markResolved = async (q) => {
+    if (!supabase) return;
+    await supabase.from('questions').update({ status: 'resolved', updated_at: new Date().toISOString() }).eq('id', q.id);
+    setQuestions(prev => prev.map(x => x.id === q.id ? { ...x, status: 'resolved' } : x));
+  };
+
   const pending = submissions.filter(s => s.status === 'submitted' || s.status === 'under_review');
   const display = filter === 'pending' ? pending : submissions;
 
@@ -2336,84 +2462,163 @@ function MentorDashboard({ profile, modules, onViewSubmission }) {
     <main className="max-w-6xl mx-auto px-6 lg:px-10 py-12 animate-fade-in">
       <div className="eyebrow mb-3">Mentor Review</div>
       <h1 className="font-display text-4xl font-semibold mb-2">Apprentice submissions</h1>
-      <p className="text-base mb-10" style={{ color: 'var(--gic-muted)' }}>
-        Review demonstrated competencies and sign off on On-the-Job Learning hours.
+      <p className="text-base mb-8" style={{ color: 'var(--gic-muted)' }}>
+        Review demonstrated competencies, answer questions, and sign off on On-the-Job Learning hours.
       </p>
 
-      <div className="flex items-center gap-2 mb-6">
-        <button onClick={() => setFilter('pending')}
-                className={'px-4 py-2 rounded-full text-sm font-medium ' + (filter === 'pending' ? 'text-white' : '')}
-                style={filter === 'pending' ? { background: 'var(--gic-blue)' } : { background: 'var(--gic-bone)', color: 'var(--gic-ink)' }}>
-          Pending review ({pending.length})
-        </button>
-        <button onClick={() => setFilter('all')}
-                className={'px-4 py-2 rounded-full text-sm font-medium ' + (filter === 'all' ? 'text-white' : '')}
-                style={filter === 'all' ? { background: 'var(--gic-blue)' } : { background: 'var(--gic-bone)', color: 'var(--gic-ink)' }}>
-          All ({submissions.length})
-        </button>
+      {/* Tab bar */}
+      <div className="flex gap-1 mb-8 border-b" style={{ borderColor: 'var(--gic-line)' }}>
+        {[['submissions','Submissions'],['questions','Questions']].map(([id,label]) => (
+          <button key={id} onClick={() => setActiveTab(id)}
+            className="px-5 py-3 text-sm font-medium"
+            style={{ borderBottom: activeTab===id ? '2px solid var(--gic-blue)' : '2px solid transparent',
+                     color: activeTab===id ? 'var(--gic-blue)' : 'var(--gic-muted)', marginBottom: '-1px' }}>
+            {label}
+            {id==='submissions' && pending.length > 0 && (
+              <span className="ml-2 text-xs font-bold" style={{ color: 'var(--gic-amber)' }}>{pending.length}</span>
+            )}
+            {id==='questions' && questions.filter(q=>q.status==='open').length > 0 && (
+              <span className="ml-2 text-xs font-bold" style={{ color: 'var(--gic-amber)' }}>{questions.filter(q=>q.status==='open').length}</span>
+            )}
+          </button>
+        ))}
       </div>
 
-      {display.length === 0 ? (
-        <div className="gic-card p-12 text-center">
-          <ClipboardCheck size={28} className="mx-auto mb-4" style={{ color: 'var(--gic-warm)' }}/>
-          <div className="font-display text-xl font-semibold mb-2">
-            {filter === 'pending' ? 'Nothing pending' : 'No submissions yet'}
+      {activeTab === 'submissions' && <>
+        <div className="flex items-center gap-2 mb-6">
+          <button onClick={() => setFilter('pending')}
+                  className={'px-4 py-2 rounded-full text-sm font-medium ' + (filter === 'pending' ? 'text-white' : '')}
+                  style={filter === 'pending' ? { background: 'var(--gic-blue)' } : { background: 'var(--gic-bone)', color: 'var(--gic-ink)' }}>
+            Pending review ({pending.length})
+          </button>
+          <button onClick={() => setFilter('all')}
+                  className={'px-4 py-2 rounded-full text-sm font-medium ' + (filter === 'all' ? 'text-white' : '')}
+                  style={filter === 'all' ? { background: 'var(--gic-blue)' } : { background: 'var(--gic-bone)', color: 'var(--gic-ink)' }}>
+            All ({submissions.length})
+          </button>
+        </div>
+
+        {display.length === 0 ? (
+          <div className="gic-card p-12 text-center">
+            <ClipboardCheck size={28} className="mx-auto mb-4" style={{ color: 'var(--gic-warm)' }}/>
+            <div className="font-display text-xl font-semibold mb-2">
+              {filter === 'pending' ? 'Nothing pending' : 'No submissions yet'}
+            </div>
+            <p className="text-sm" style={{ color: 'var(--gic-muted)' }}>
+              {filter === 'pending'
+                ? 'All caught up. New submissions will appear here in real time.'
+                : 'When your apprentices submit recordings, they appear here.'}
+            </p>
           </div>
-          <p className="text-sm" style={{ color: 'var(--gic-muted)' }}>
-            {filter === 'pending'
-              ? 'All caught up. New submissions will appear here in real time.'
-              : 'When your apprentices submit recordings, they appear here.'}
-          </p>
-        </div>
-      ) : (
-        <div className="space-y-3">
-          {display.map(s => {
-            const apprentice = profilesById[s.apprentice_id];
-            const mod = modules.find(m => m.id === s.module_id);
-            return (
-              <button key={s.id}
-                      onClick={() => onViewSubmission(s, mod)}
-                      className="w-full text-left gic-card p-5 hover:shadow-lg transition-all flex items-center justify-between">
-                <div className="flex items-start gap-4 flex-1">
-                  <div className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0"
-                       style={{
-                         background: s.status === 'approved' ? 'rgba(31,122,74,0.08)'
-                                   : s.status === 'needs_revision' ? 'rgba(184,61,92,0.08)'
-                                   : 'rgba(45,31,177,0.06)',
-                         color:      s.status === 'approved' ? 'var(--gic-green)'
-                                   : s.status === 'needs_revision' ? 'var(--gic-rose)'
-                                   : 'var(--gic-blue)'
-                       }}>
-                    {s.status === 'approved' ? <CheckCircle2 size={20}/>
-                     : s.status === 'needs_revision' ? <RotateCcw size={20}/>
-                     : <Video size={20}/>}
-                  </div>
-                  <div className="flex-1">
-                    <div className="font-medium">{apprentice?.full_name || apprentice?.email || 'Apprentice'}</div>
-                    <div className="text-sm" style={{ color: 'var(--gic-muted)' }}>
-                      {mod ? `Module ${String(mod.module_number).padStart(2,'0')} · ${mod.title}` : 'Unknown module'}
+        ) : (
+          <div className="space-y-3">
+            {display.map(s => {
+              const apprentice = profilesById[s.apprentice_id];
+              const mod = modules.find(m => m.id === s.module_id);
+              return (
+                <button key={s.id}
+                        onClick={() => onViewSubmission(s, mod)}
+                        className="w-full text-left gic-card p-5 hover:shadow-lg transition-all flex items-center justify-between">
+                  <div className="flex items-start gap-4 flex-1">
+                    <div className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0"
+                         style={{
+                           background: s.status === 'approved' ? 'rgba(31,122,74,0.08)'
+                                     : s.status === 'needs_revision' ? 'rgba(184,61,92,0.08)'
+                                     : 'rgba(45,31,177,0.06)',
+                           color:      s.status === 'approved' ? 'var(--gic-green)'
+                                     : s.status === 'needs_revision' ? 'var(--gic-rose)'
+                                     : 'var(--gic-blue)'
+                         }}>
+                      {s.status === 'approved' ? <CheckCircle2 size={20}/>
+                       : s.status === 'needs_revision' ? <RotateCcw size={20}/>
+                       : <Video size={20}/>}
                     </div>
-                    <div className="text-xs mt-1" style={{ color: 'var(--gic-warm)' }}>
-                      Submitted {fmtRelative(s.submitted_at)}
-                      {s.duration_seconds ? ` · ${Math.floor(s.duration_seconds/60)}m ${s.duration_seconds%60}s` : ''}
+                    <div className="flex-1">
+                      <div className="font-medium">{apprentice?.full_name || apprentice?.email || 'Apprentice'}</div>
+                      <div className="text-sm" style={{ color: 'var(--gic-muted)' }}>
+                        {mod ? `Module ${String(mod.module_number).padStart(2,'0')} · ${mod.title}` : 'Unknown module'}
+                      </div>
+                      <div className="text-xs mt-1" style={{ color: 'var(--gic-warm)' }}>
+                        Submitted {fmtRelative(s.submitted_at)}
+                        {s.duration_seconds ? ` · ${Math.floor(s.duration_seconds/60)}m ${s.duration_seconds%60}s` : ''}
+                      </div>
                     </div>
                   </div>
+                  <div className="flex items-center gap-3">
+                    <span className="badge" style={
+                      s.status === 'approved' ? { color: 'var(--gic-green)', background: 'rgba(31,122,74,0.08)' }
+                      : s.status === 'needs_revision' ? { color: 'var(--gic-rose)', background: 'rgba(184,61,92,0.08)' }
+                      : { color: 'var(--gic-blue)' }
+                    }>
+                      {s.status.replace('_', ' ')}
+                    </span>
+                    <ChevronRight size={16} style={{ color: 'var(--gic-warm)' }}/>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </>}
+
+      {activeTab === 'questions' && <>
+        {questionsLoading ? <LoadingScreen /> : questions.length === 0 ? (
+          <div className="gic-card p-12 text-center">
+            <MessageSquare size={28} className="mx-auto mb-4" style={{ color: 'var(--gic-warm)' }}/>
+            <div className="font-display text-xl font-semibold mb-2">No questions yet</div>
+            <p className="text-sm" style={{ color: 'var(--gic-muted)' }}>Apprentice questions from their lesson pages will appear here.</p>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {questions.map(q => {
+              const asker = qProfilesById[q.asker_id];
+              return (
+                <div key={q.id} className="gic-card p-6">
+                  <div className="flex items-start justify-between gap-4 mb-3">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-1">
+                        {asker && <span className="text-xs font-semibold">{asker.full_name || asker.email}</span>}
+                        {q.lesson_title && <span className="eyebrow">{q.lesson_title}</span>}
+                        {q.module_number && <span className="text-xs" style={{ color: 'var(--gic-warm)' }}>Module {String(q.module_number).padStart(2,'0')}</span>}
+                      </div>
+                      <div className="font-semibold text-sm leading-relaxed">{q.question_text}</div>
+                      <div className="text-xs mt-1" style={{ color: 'var(--gic-warm)' }}>{fmtRelative(q.created_at)}</div>
+                    </div>
+                    <span className="badge flex-shrink-0"
+                      style={q.status === 'resolved'
+                        ? { color: 'var(--gic-green)', background: 'rgba(31,122,74,0.08)' }
+                        : { color: 'var(--gic-amber)', background: 'rgba(200,132,28,0.08)' }}>
+                      {q.status === 'resolved' ? 'Answered' : 'Open'}
+                    </span>
+                  </div>
+                  {q.status === 'open' && (
+                    <div className="mt-4 pt-4 border-t" style={{ borderColor: 'var(--gic-line)' }}>
+                      <textarea
+                        value={answerTexts[q.id] || ''}
+                        onChange={e => setAnswerTexts(prev => ({ ...prev, [q.id]: e.target.value }))}
+                        placeholder="Type your answer here…"
+                        rows={3}
+                        className="w-full border rounded-lg p-3 text-sm mb-3 resize-none"
+                        style={{ borderColor: 'var(--gic-line)' }}
+                      />
+                      <div className="flex items-center gap-2">
+                        <button onClick={() => sendAnswer(q)}
+                          disabled={!(answerTexts[q.id]||'').trim() || answerSending[q.id]}
+                          className="btn-primary flex items-center gap-2 text-sm">
+                          <Send size={13}/> {answerSending[q.id] ? 'Sending…' : 'Send response'}
+                        </button>
+                        <button onClick={() => markResolved(q)} className="btn-ghost text-sm" style={{ color: 'var(--gic-muted)' }}>
+                          Mark resolved
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
-                <div className="flex items-center gap-3">
-                  <span className="badge" style={
-                    s.status === 'approved' ? { color: 'var(--gic-green)', background: 'rgba(31,122,74,0.08)' }
-                    : s.status === 'needs_revision' ? { color: 'var(--gic-rose)', background: 'rgba(184,61,92,0.08)' }
-                    : { color: 'var(--gic-blue)' }
-                  }>
-                    {s.status.replace('_', ' ')}
-                  </span>
-                  <ChevronRight size={16} style={{ color: 'var(--gic-warm)' }}/>
-                </div>
-              </button>
-            );
-          })}
-        </div>
-      )}
+              );
+            })}
+          </div>
+        )}
+      </>}
     </main>
   );
 }
@@ -2640,10 +2845,363 @@ function TokenForm({ sponsor, onSave, onClose }) {
 }
 
 // ============================================================
+// READ ALONG BAR — text-to-speech with word highlight
+// ============================================================
+function ReadAlongBar({ blocks }) {
+  const [active, setActive] = useState(false);
+  const [wordIdx, setWordIdx] = useState(-1);
+  const [words, setWords] = useState([]);
+  const uttRef = useRef(null);
+
+  function extractText(html) {
+    return (html||'').replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim();
+  }
+
+  function buildWords(blocks) {
+    const result = [];
+    (blocks||[]).forEach(b => {
+      let texts = [];
+      if (b.type==='paragraph'||b.type==='heading'||b.type==='subheading') texts.push(extractText(b.text||''));
+      else if (b.type==='list'||b.type==='numbered') (b.items||[]).forEach(i=>texts.push(extractText(i)));
+      else if (b.type==='callout') { if(b.title) texts.push(b.title); texts.push(extractText(b.text||'')); }
+      else if (b.type==='activity') { if(b.title) texts.push(b.title); if(b.prompt) texts.push(extractText(b.prompt)); (b.steps||[]).forEach(s=>texts.push(extractText(s))); }
+      texts.forEach(t => t.split(/\s+/).filter(Boolean).forEach(w => result.push(w)));
+    });
+    return result;
+  }
+
+  const start = useCallback(() => {
+    const ws = buildWords(blocks);
+    setWords(ws);
+    const text = ws.join(' ');
+    const utt = new SpeechSynthesisUtterance(text);
+    let idx = 0;
+    utt.onboundary = (e) => { if(e.name==='word') setWordIdx(idx++); };
+    utt.onend = () => { setActive(false); setWordIdx(-1); };
+    uttRef.current = utt;
+    setActive(true);
+    setWordIdx(0);
+    window.speechSynthesis.speak(utt);
+  }, [blocks]);
+
+  const stop = useCallback(() => {
+    window.speechSynthesis.cancel();
+    setActive(false);
+    setWordIdx(-1);
+    uttRef.current = null;
+  }, []);
+
+  useEffect(() => () => window.speechSynthesis.cancel(), []);
+
+  return (
+    <div className="mb-6 flex items-center gap-3 flex-wrap">
+      <button
+        onClick={active ? stop : start}
+        className="btn-ghost flex items-center gap-1.5 text-sm"
+        style={{ color: active ? 'var(--gic-rose)' : 'var(--gic-blue)', border: '1px solid currentColor', borderRadius: '6px', padding: '6px 14px' }}>
+        {active ? <><Square size={12}/> Stop reading</> : <><Play size={12}/> Read aloud</>}
+      </button>
+      {active && wordIdx >= 0 && words[wordIdx] && (
+        <div className="flex items-center gap-2 flex-1 min-w-0">
+          <div className="text-xs" style={{ color: 'var(--gic-muted)' }}>Now reading:</div>
+          <div className="font-semibold text-sm px-2 py-0.5 rounded" style={{ background: 'rgba(45,31,177,0.08)', color: 'var(--gic-blue)' }}>
+            {words.slice(Math.max(0,wordIdx-2), wordIdx+4).map((w,i) => (
+              <span key={i} style={i === Math.min(2,wordIdx) ? { background:'rgba(45,31,177,0.2)',borderRadius:'3px',padding:'0 2px'} : {}}>{w} </span>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ============================================================
+// ASK QUESTION BUTTON — submit a question from within a lesson
+// ============================================================
+function AskQuestionButton({ profile, moduleNumber, lessonIndex, lessonTitle }) {
+  const [open, setOpen] = useState(false);
+  const [text, setText] = useState('');
+  const [sending, setSending] = useState(false);
+  const [sent, setSent] = useState(false);
+
+  const submit = async () => {
+    if (!text.trim() || !supabase) return;
+    setSending(true);
+    const { error } = await supabase.from('questions').insert({
+      asker_id: profile.id,
+      module_number: moduleNumber,
+      lesson_index: lessonIndex,
+      lesson_title: lessonTitle,
+      question_text: text.trim()
+    });
+    setSending(false);
+    if (!error) { setSent(true); setText(''); setTimeout(() => { setSent(false); setOpen(false); }, 2000); }
+  };
+
+  return (
+    <div className="mt-10 mb-6">
+      <div className="gic-rule mb-6"><span className="font-display italic text-sm">?</span></div>
+      {!open && !sent && (
+        <button onClick={() => setOpen(true)} className="btn-ghost flex items-center gap-2 text-sm" style={{ color: 'var(--gic-blue)' }}>
+          <MessageSquare size={14} /> Have a question about this lesson?
+        </button>
+      )}
+      {sent && <div className="text-sm text-green-700">✓ Question sent to your mentor. You'll see the response in My Progress.</div>}
+      {open && (
+        <div className="gic-card p-6">
+          <div className="eyebrow mb-3 flex items-center gap-1.5"><MessageSquare size={11}/> Ask your mentor</div>
+          <div className="font-display text-lg font-semibold mb-1">Have a question?</div>
+          <p className="text-sm mb-4" style={{ color: 'var(--gic-muted)' }}>Your question will be sent to your instructor or mentor for review.</p>
+          <textarea
+            value={text} onChange={e => setText(e.target.value)}
+            placeholder="Type your question here..."
+            rows={4}
+            className="w-full border rounded-lg p-3 text-sm mb-4 resize-none"
+            style={{ borderColor: 'var(--gic-line)' }}
+          />
+          <div className="flex items-center gap-3">
+            <button onClick={submit} disabled={!text.trim() || sending} className="btn-primary flex items-center gap-2 text-sm">
+              <Send size={13}/> {sending ? 'Sending…' : 'Send question'}
+            </button>
+            <button onClick={() => { setOpen(false); setText(''); }} className="btn-ghost text-sm">Cancel</button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ============================================================
+// QUESTIONS PAGE — apprentice view of their questions & answers
+// ============================================================
+function QuestionsPage({ profile }) {
+  const [questions, setQuestions] = useState([]);
+  const [answers, setAnswers] = useState({});
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!supabase || !profile?.id) return;
+    let mounted = true;
+    (async () => {
+      const { data: qs } = await supabase
+        .from('questions')
+        .select('*')
+        .eq('asker_id', profile.id)
+        .order('created_at', { ascending: false });
+      if (!mounted || !qs) return;
+      setQuestions(qs);
+      const ids = qs.map(q => q.id);
+      if (ids.length > 0) {
+        const { data: ans } = await supabase.from('question_answers').select('*').in('question_id', ids);
+        if (ans && mounted) {
+          const map = {};
+          ans.forEach(a => { if (!map[a.question_id]) map[a.question_id] = []; map[a.question_id].push(a); });
+          setAnswers(map);
+        }
+      }
+      setLoading(false);
+    })();
+    return () => { mounted = false; };
+  }, [profile?.id]);
+
+  if (loading) return <div className="py-12 text-center"><LoadingScreen /></div>;
+
+  return (
+    <div className="animate-fade-in">
+      <div className="eyebrow mb-3">My Questions</div>
+      <h2 className="font-display text-2xl font-semibold mb-2">Questions & Responses</h2>
+      <p className="text-sm mb-8" style={{ color: 'var(--gic-muted)' }}>Questions you've sent to your mentors and their responses.</p>
+      {questions.length === 0 ? (
+        <div className="gic-card p-10 text-center">
+          <MessageSquare size={28} className="mx-auto mb-3" style={{ color: 'var(--gic-warm)' }} />
+          <div className="font-display text-xl font-semibold mb-2">No questions yet</div>
+          <p className="text-sm" style={{ color: 'var(--gic-muted)' }}>When you have questions during a lesson, use the "Ask your mentor" button at the bottom of each lesson.</p>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {questions.map(q => (
+            <div key={q.id} className="gic-card p-6">
+              <div className="flex items-start justify-between gap-4 mb-3">
+                <div>
+                  {q.lesson_title && <div className="eyebrow mb-1">{q.lesson_title}</div>}
+                  <div className="font-semibold text-sm">{q.question_text}</div>
+                </div>
+                <span className="badge flex-shrink-0"
+                  style={q.status === 'resolved'
+                    ? { color: 'var(--gic-green)', background: 'rgba(31,122,74,0.08)' }
+                    : { color: 'var(--gic-amber)', background: 'rgba(200,132,28,0.08)' }}>
+                  {q.status === 'resolved' ? 'Answered' : 'Pending'}
+                </span>
+              </div>
+              <div className="text-xs mb-3" style={{ color: 'var(--gic-warm)' }}>{fmtRelative(q.created_at)}</div>
+              {(answers[q.id] || []).map(a => (
+                <div key={a.id} className="mt-3 pl-4 border-l-2 text-sm" style={{ borderColor: 'var(--gic-blue)' }}>
+                  <div className="font-semibold mb-0.5" style={{ color: 'var(--gic-blue)' }}>{a.responder_name || 'Mentor'}</div>
+                  <div className="leading-relaxed">{a.answer_text}</div>
+                </div>
+              ))}
+              {!(answers[q.id]||[]).length && (
+                <div className="text-xs mt-2 italic" style={{ color: 'var(--gic-muted)' }}>Awaiting response from your mentor…</div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ============================================================
+// APPRENTICE VIEW — wraps questions + OJL submissions
+// ============================================================
+function ApprenticeView({ profile, modules, submissions, onOpenModule, onViewSubmission }) {
+  const [tab, setTab] = useState('questions'); // questions | submissions
+
+  return (
+    <main className="max-w-4xl mx-auto px-6 lg:px-10 py-12 animate-fade-in">
+      <div className="eyebrow mb-3">My Progress</div>
+      <h1 className="font-display text-4xl font-semibold mb-8">Apprentice Dashboard</h1>
+
+      <div className="flex gap-1 mb-8 border-b" style={{ borderColor: 'var(--gic-line)' }}>
+        {[['questions','My Questions'],['submissions','OJL Submissions']].map(([id,label]) => (
+          <button key={id} onClick={() => setTab(id)}
+            className="px-5 py-3 text-sm font-medium"
+            style={{ borderBottom: tab===id ? '2px solid var(--gic-blue)' : '2px solid transparent',
+                     color: tab===id ? 'var(--gic-blue)' : 'var(--gic-muted)', marginBottom: '-1px' }}>
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {tab === 'questions' && <QuestionsPage profile={profile} />}
+      {tab === 'submissions' && (
+        <div className="space-y-3">
+          {submissions.length === 0
+            ? <div className="gic-card p-10 text-center text-sm" style={{ color: 'var(--gic-muted)' }}>No submissions yet. Record OJL competency videos from within each module.</div>
+            : submissions.map(s => {
+                const mod = modules.find(m => m.id === s.module_id);
+                return (
+                  <button key={s.id} onClick={() => onViewSubmission(s, mod)}
+                    className="w-full text-left gic-card p-5 flex items-center gap-4 hover:bg-stone-50 transition">
+                    <div className="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0"
+                      style={{
+                        background: s.status==='approved' ? 'rgba(31,122,74,0.08)' : s.status==='needs_revision' ? 'rgba(184,61,92,0.08)' : 'rgba(45,31,177,0.06)',
+                        color: s.status==='approved' ? 'var(--gic-green)' : s.status==='needs_revision' ? 'var(--gic-rose)' : 'var(--gic-blue)'
+                      }}>
+                      {s.status==='approved' ? <CheckCircle2 size={16}/> : s.status==='needs_revision' ? <RotateCcw size={16}/> : <Clock size={16}/>}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-semibold text-sm">{mod?.title || 'Module'}</div>
+                      <div className="text-xs mt-0.5" style={{ color: 'var(--gic-muted)' }}>
+                        {s.status==='approved' ? 'Approved' : s.status==='needs_revision' ? 'Needs revision' : 'Under review'} · {fmtRelative(s.submitted_at)}
+                      </div>
+                    </div>
+                    <ChevronRight size={16} style={{ color: 'var(--gic-warm)' }} />
+                  </button>
+                );
+              })
+          }
+        </div>
+      )}
+    </main>
+  );
+}
+
+// ============================================================
+// MODULE EDITOR — admin modal to edit a module's content
+// ============================================================
+function ModuleEditor({ mod, onClose, onSaved }) {
+  const [title, setTitle] = useState(mod.title || '');
+  const [desc, setDesc] = useState(mod.short_description || '');
+  const [objectives, setObjectives] = useState((mod.learning_objectives || []).join('\n'));
+  const [lessons, setLessons] = useState(() => JSON.stringify(mod.content?.lessons || [], null, 2));
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const [activeTab, setActiveTab] = useState('meta'); // meta | lessons
+
+  const save = async () => {
+    setSaving(true); setError('');
+    let parsedLessons;
+    try { parsedLessons = JSON.parse(lessons); } catch(e) { setError('Lessons JSON is invalid: ' + e.message); setSaving(false); return; }
+    const objs = objectives.split('\n').map(s=>s.trim()).filter(Boolean);
+    const { data, error: err } = await supabase.from('modules').update({
+      title, short_description: desc,
+      learning_objectives: objs,
+      content: { ...(mod.content || {}), lessons: parsedLessons },
+      updated_at: new Date().toISOString()
+    }).eq('id', mod.id).select().single();
+    setSaving(false);
+    if (err) { setError(err.message); return; }
+    if (data) onSaved(data);
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-start justify-center" style={{ background: 'rgba(15,22,49,0.6)', overflowY: 'auto', paddingTop: '40px', paddingBottom: '40px' }}>
+      <div className="gic-card w-full max-w-3xl mx-4 animate-fade-in">
+        <div className="flex items-center justify-between p-6 border-b" style={{ borderColor: 'var(--gic-line)' }}>
+          <div>
+            <div className="eyebrow mb-1">Admin · Module Editor</div>
+            <div className="font-display text-xl font-semibold">Module {String(mod.module_number).padStart(2,'0')}</div>
+          </div>
+          <button onClick={onClose} className="btn-ghost"><X size={18}/></button>
+        </div>
+
+        <div className="flex border-b" style={{ borderColor: 'var(--gic-line)' }}>
+          {['meta','lessons'].map(tab => (
+            <button key={tab} onClick={() => setActiveTab(tab)}
+              className="px-6 py-3 text-sm font-medium"
+              style={{ borderBottom: activeTab===tab ? '2px solid var(--gic-blue)' : '2px solid transparent',
+                       color: activeTab===tab ? 'var(--gic-blue)' : 'var(--gic-muted)' }}>
+              {tab === 'meta' ? 'Overview' : 'Lesson Content'}
+            </button>
+          ))}
+        </div>
+
+        <div className="p-6 space-y-5">
+          {activeTab === 'meta' && <>
+            <div>
+              <label className="eyebrow mb-1 block">Module Title</label>
+              <input value={title} onChange={e=>setTitle(e.target.value)} className="w-full border rounded-lg p-3 text-sm" style={{ borderColor: 'var(--gic-line)' }} />
+            </div>
+            <div>
+              <label className="eyebrow mb-1 block">Short Description</label>
+              <textarea value={desc} onChange={e=>setDesc(e.target.value)} rows={3} className="w-full border rounded-lg p-3 text-sm resize-none" style={{ borderColor: 'var(--gic-line)' }} />
+            </div>
+            <div>
+              <label className="eyebrow mb-1 block">Learning Objectives (one per line)</label>
+              <textarea value={objectives} onChange={e=>setObjectives(e.target.value)} rows={8} className="w-full border rounded-lg p-3 text-sm font-mono resize-none" style={{ borderColor: 'var(--gic-line)' }} />
+            </div>
+          </>}
+
+          {activeTab === 'lessons' && <>
+            <div>
+              <label className="eyebrow mb-1 block">Lessons JSON</label>
+              <p className="text-xs mb-2" style={{ color: 'var(--gic-muted)' }}>
+                Edit the lesson array directly. Each lesson: {"{ title, summary, read_time, watch_time, listen_time, blocks: [...] }"}. Block types: paragraph, heading, subheading, list, numbered, callout, video, image, audio, glossary, activity, divider.
+              </p>
+              <textarea value={lessons} onChange={e=>setLessons(e.target.value)} rows={20} className="w-full border rounded-lg p-3 text-xs font-mono resize-none" style={{ borderColor: 'var(--gic-line)', lineHeight: '1.5' }} />
+            </div>
+          </>}
+
+          {error && <div className="text-sm p-3 rounded" style={{ background: 'rgba(184,61,92,0.08)', color: 'var(--gic-rose)' }}>{error}</div>}
+        </div>
+
+        <div className="flex items-center justify-between p-6 border-t" style={{ borderColor: 'var(--gic-line)' }}>
+          <button onClick={onClose} className="btn-ghost">Cancel</button>
+          <button onClick={save} disabled={saving} className="btn-primary flex items-center gap-2">
+            <Save size={14}/> {saving ? 'Saving…' : 'Save changes'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================
 // MAIN APP
 // ============================================================
 function App({ profile, signOut }) {
-  const [view, setView]         = useState('dashboard'); // dashboard | admin | module | mentor | sponsors
+  const [view, setView]         = useState('dashboard'); // dashboard | admin | module | mentor | sponsors | apprentice | questions
   const [modules, setModules]   = useState([]);
   const [progress, setProgress] = useState([]);
   const [submissions, setSubmissions]               = useState([]);
@@ -2875,6 +3433,15 @@ function App({ profile, signOut }) {
             progress={progress}
             profile={profile}
             onOpenModule={handleOpen}
+          />
+        )}
+        {view === 'apprentice' && (
+          <ApprenticeView
+            profile={profile}
+            modules={modules}
+            submissions={submissions}
+            onOpenModule={handleOpen}
+            onViewSubmission={handleViewSubmission}
           />
         )}
       </div>
