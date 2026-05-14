@@ -7,6 +7,14 @@
   to = "/index.html"
   status = 200
 
+# Never cache index.html — always serve the latest version
+[[headers]]
+  for = "/index.html"
+  [headers.values]
+    Cache-Control = "no-cache, no-store, must-revalidate"
+    Pragma        = "no-cache"
+    Expires       = "0"
+
 # Security headers
 [[headers]]
   for = "/*"
