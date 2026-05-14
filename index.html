@@ -232,7 +232,8 @@ import {
   Mic, Square, Send, Building2, Video, Play, Pause, Upload,
   Plus, Edit3, Trash2, Copy, UserCheck, Users, KeySquare,
   ClipboardCheck, RotateCcw, ExternalLink, Save,
-  Camera, Settings, Download
+  Camera, Settings, Download,
+  SkipBack, SkipForward, Headphones, Volume2
 } from 'lucide-react';
 
 // ============================================================
@@ -1096,6 +1097,7 @@ function ModuleView({ module: mod, progress, profile, onBack, onProgressUpdate, 
   const [view, setView]               = useState('overview'); // overview | lesson | quiz | results
   const [currentLesson, setCurrentLesson] = useState(progress?.current_lesson || 0);
   const [completedLessons, setCompletedLessons] = useState(progress?.lessons_completed || []);
+  const [ttsBlock, setTtsBlock] = useState(-1);
   const isAdmin = profile?.role === 'admin' || profile?.role === 'approver';
   const isApproved = mod.status === 'approved';
   const content = mod.content || {};
@@ -1218,7 +1220,7 @@ function ModuleView({ module: mod, progress, profile, onBack, onProgressUpdate, 
               const done = completedLessons.includes(idx);
               return (
                 <button key={idx}
-                  onClick={() => { setCurrentLesson(idx); setView('lesson'); }}
+                  onClick={() => { setCurrentLesson(idx); setTtsBlock(-1); window.speechSynthesis.cancel(); setView('lesson'); }}
                   className="w-full p-5 text-left flex items-center gap-4 hover:bg-stone-50 transition-colors">
                   <div className="font-mono text-xs w-8" style={{ color: 'var(--gic-warm)' }}>
                     {String(idx + 1).padStart(2, '0')}
@@ -1342,9 +1344,12 @@ function ModuleView({ module: mod, progress, profile, onBack, onProgressUpdate, 
   if (view === 'lesson') {
     const lesson = lessons[currentLesson];
     if (!lesson) return null;
+    const lessonBlocks = lesson.blocks || [];
 
     return (
-      <main className="max-w-3xl mx-auto px-6 lg:px-10 py-12 animate-fade-in">
+      <main className="max-w-3xl mx-auto px-6 lg:px-10 py-12 animate-fade-in" style={{ position:'relative' }}>
+        <SelectionReader />
+
         <button onClick={() => setView('overview')} className="btn-ghost flex items-center gap-1.5 mb-8">
           <ArrowLeft size={14} /> Module overview
         </button>
@@ -1357,10 +1362,25 @@ function ModuleView({ module: mod, progress, profile, onBack, onProgressUpdate, 
         </div>
         <h1 className="font-display text-4xl font-semibold leading-tight mb-8">{lesson.title}</h1>
 
-        <ReadAlongBar blocks={lesson.blocks || []} />
+        <LessonPlayer
+          blocks={lessonBlocks}
+          activeBlock={ttsBlock}
+          setActiveBlock={setTtsBlock}
+        />
 
         <div className="prose-gic">
-          {(lesson.blocks || []).map((block, i) => <LessonBlock key={i} block={block} />)}
+          {lessonBlocks.map((block, i) => (
+            <div key={i} id={`tts-block-${i}`}
+              style={{
+                transition: 'background 0.3s, border-color 0.3s',
+                borderLeft: ttsBlock === i ? '3px solid var(--gic-blue)' : '3px solid transparent',
+                paddingLeft: ttsBlock === i ? '12px' : '0',
+                borderRadius: '0 4px 4px 0',
+                background: ttsBlock === i ? 'rgba(45,31,177,0.04)' : 'transparent',
+              }}>
+              <LessonBlock block={block} />
+            </div>
+          ))}
         </div>
 
         <AskQuestionButton profile={profile} moduleNumber={mod.module_number} lessonIndex={currentLesson} lessonTitle={lesson.title} />
@@ -1368,7 +1388,7 @@ function ModuleView({ module: mod, progress, profile, onBack, onProgressUpdate, 
         {/* Nav */}
         <div className="mt-16 pt-8 border-t flex items-center justify-between" style={{ borderColor: 'var(--gic-line)' }}>
           <button
-            onClick={() => setCurrentLesson(Math.max(0, currentLesson - 1))}
+            onClick={() => { setCurrentLesson(Math.max(0, currentLesson - 1)); setTtsBlock(-1); window.speechSynthesis.cancel(); }}
             disabled={currentLesson === 0}
             className="btn-ghost flex items-center gap-1.5 disabled:opacity-30">
             <ArrowLeft size={14} /> Previous
@@ -1378,7 +1398,7 @@ function ModuleView({ module: mod, progress, profile, onBack, onProgressUpdate, 
             onClick={async () => {
               await markLessonComplete(currentLesson);
               if (currentLesson < lessons.length - 1) {
-                setCurrentLesson(currentLesson + 1);
+                setCurrentLesson(currentLesson + 1); setTtsBlock(-1); window.speechSynthesis.cancel();
                 window.scrollTo({ top: 0, behavior: 'smooth' });
               } else {
                 setView('overview');
@@ -3030,70 +3050,185 @@ function TokenForm({ sponsor, onSave, onClose }) {
 // ============================================================
 // READ ALONG BAR — text-to-speech with word highlight
 // ============================================================
-function ReadAlongBar({ blocks }) {
-  const [active, setActive] = useState(false);
-  const [wordIdx, setWordIdx] = useState(-1);
-  const [words, setWords] = useState([]);
-  const uttRef = useRef(null);
+// ============================================================
+// SELECTION READER — floating "Read selection" button on highlight
+// ============================================================
+function SelectionReader() {
+  const [selText, setSelText] = useState('');
+  const [pos, setPos] = useState({ x: 0, y: 0 });
+  const [show, setShow] = useState(false);
 
-  function extractText(html) {
-    return (html||'').replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim();
-  }
-
-  function buildWords(blocks) {
-    const result = [];
-    (blocks||[]).forEach(b => {
-      let texts = [];
-      if (b.type==='paragraph'||b.type==='heading'||b.type==='subheading') texts.push(extractText(b.text||''));
-      else if (b.type==='list'||b.type==='numbered') (b.items||[]).forEach(i=>texts.push(extractText(i)));
-      else if (b.type==='callout') { if(b.title) texts.push(b.title); texts.push(extractText(b.text||'')); }
-      else if (b.type==='activity') { if(b.title) texts.push(b.title); if(b.prompt) texts.push(extractText(b.prompt)); (b.steps||[]).forEach(s=>texts.push(extractText(s))); }
-      texts.forEach(t => t.split(/\s+/).filter(Boolean).forEach(w => result.push(w)));
-    });
-    return result;
-  }
-
-  const start = useCallback(() => {
-    const ws = buildWords(blocks);
-    setWords(ws);
-    const text = ws.join(' ');
-    const utt = new SpeechSynthesisUtterance(text);
-    let idx = 0;
-    utt.onboundary = (e) => { if(e.name==='word') setWordIdx(idx++); };
-    utt.onend = () => { setActive(false); setWordIdx(-1); };
-    uttRef.current = utt;
-    setActive(true);
-    setWordIdx(0);
-    window.speechSynthesis.speak(utt);
-  }, [blocks]);
-
-  const stop = useCallback(() => {
-    window.speechSynthesis.cancel();
-    setActive(false);
-    setWordIdx(-1);
-    uttRef.current = null;
+  useEffect(() => {
+    const onUp = () => {
+      const sel = window.getSelection();
+      const selected = sel?.toString().trim();
+      if (selected && selected.length > 3) {
+        try {
+          const rect = sel.getRangeAt(0).getBoundingClientRect();
+          setPos({ x: rect.left + rect.width / 2, y: rect.top + window.scrollY - 48 });
+          setSelText(selected);
+          setShow(true);
+        } catch {}
+      } else {
+        setShow(false);
+      }
+    };
+    document.addEventListener('mouseup', onUp);
+    document.addEventListener('touchend', onUp);
+    return () => { document.removeEventListener('mouseup', onUp); document.removeEventListener('touchend', onUp); };
   }, []);
 
-  useEffect(() => () => window.speechSynthesis.cancel(), []);
+  if (!show) return null;
+  return (
+    <div style={{ position: 'absolute', left: pos.x, top: pos.y, transform: 'translateX(-50%)', zIndex: 999 }}>
+      <button
+        onClick={() => {
+          window.speechSynthesis.cancel();
+          window.speechSynthesis.speak(Object.assign(new SpeechSynthesisUtterance(selText), { rate: 1 }));
+          setShow(false);
+        }}
+        onMouseDown={e => e.preventDefault()}
+        className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold text-white shadow-lg"
+        style={{ background: 'var(--gic-blue)', whiteSpace: 'nowrap' }}>
+        <Headphones size={11}/> Read selection
+      </button>
+    </div>
+  );
+}
+
+// ============================================================
+// LESSON PLAYER — block-by-block TTS with controls
+// ============================================================
+function LessonPlayer({ blocks, activeBlock, setActiveBlock }) {
+  const [open, setOpen]       = useState(false);
+  const [playing, setPlaying] = useState(false);
+  const [paused, setPaused]   = useState(false);
+  const [rate, setRate]       = useState(1);
+  const [words, setWords]     = useState([]);
+  const [wordIdx, setWordIdx] = useState(-1);
+  const synth = window.speechSynthesis;
+
+  const blockText = useCallback((b) => {
+    if (!b) return '';
+    const clean = h => (h||'').replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim();
+    switch (b.type) {
+      case 'paragraph': case 'heading': case 'subheading': return clean(b.text);
+      case 'list': case 'numbered': return (b.items||[]).map(clean).join('. ');
+      case 'callout': return [b.title, clean(b.text)].filter(Boolean).join('. ');
+      case 'glossary': return (b.terms||[]).map(t=>`${t.term}: ${t.definition}`).join('. ');
+      case 'activity': return [b.title, b.prompt, ...(b.steps||[])].filter(Boolean).map(clean).join('. ');
+      case 'case_study': return [b.title, b.scenario, b.discussion].filter(Boolean).map(clean).join('. ');
+      default: return '';
+    }
+  }, []);
+
+  const speakFrom = useCallback((startIdx, r) => {
+    const spRate = r ?? rate;
+    synth.cancel(); setPaused(false);
+    let idx = startIdx;
+    while (idx < blocks.length && !blockText(blocks[idx])) idx++;
+    if (idx >= blocks.length) { setPlaying(false); setActiveBlock(-1); setWordIdx(-1); return; }
+    setActiveBlock(idx);
+    const text = blockText(blocks[idx]);
+    const ws = text.split(/\s+/).filter(Boolean);
+    setWords(ws); setWordIdx(0);
+    const utt = new SpeechSynthesisUtterance(text);
+    utt.rate = spRate;
+    let wi = 0;
+    utt.onboundary = e => { if (e.name === 'word') setWordIdx(wi++); };
+    utt.onend = () => { setWordIdx(-1); speakFrom(idx + 1, spRate); };
+    utt.onerror = () => { setPlaying(false); setWordIdx(-1); };
+    setPlaying(true);
+    synth.speak(utt);
+    // Scroll active block into view
+    setTimeout(() => document.getElementById(`tts-block-${idx}`)?.scrollIntoView({ behavior:'smooth', block:'center' }), 80);
+  }, [blocks, rate, blockText]);
+
+  const handlePlay   = () => paused ? (synth.resume(), setPlaying(true), setPaused(false)) : speakFrom(activeBlock >= 0 ? activeBlock : 0);
+  const handlePause  = () => { synth.pause(); setPlaying(false); setPaused(true); };
+  const handleStop   = () => { synth.cancel(); setPlaying(false); setPaused(false); setWordIdx(-1); setActiveBlock(-1); };
+  const handlePrev   = () => speakFrom(Math.max(0, (activeBlock > 0 ? activeBlock : 0) - 1));
+  const handleNext   = () => speakFrom((activeBlock >= 0 ? activeBlock : 0) + 1);
+  const handleRate   = r  => { setRate(r); if (playing || paused) speakFrom(activeBlock >= 0 ? activeBlock : 0, r); };
+
+  useEffect(() => () => synth.cancel(), []);
+
+  const readable = blocks.filter(b => blockText(b)).length;
+
+  if (!open) return (
+    <button onClick={() => setOpen(true)}
+      className="mb-6 flex items-center gap-2 text-sm font-medium px-4 py-2 rounded-full border transition hover:opacity-80"
+      style={{ borderColor:'var(--gic-blue)', color:'var(--gic-blue)', background:'rgba(45,31,177,0.04)' }}>
+      <Headphones size={14}/> Listen to this lesson
+    </button>
+  );
 
   return (
-    <div className="mb-6 flex items-center gap-3 flex-wrap">
-      <button
-        onClick={active ? stop : start}
-        className="btn-ghost flex items-center gap-1.5 text-sm"
-        style={{ color: active ? 'var(--gic-rose)' : 'var(--gic-blue)', border: '1px solid currentColor', borderRadius: '6px', padding: '6px 14px' }}>
-        {active ? <><Square size={12}/> Stop reading</> : <><Play size={12}/> Read aloud</>}
-      </button>
-      {active && wordIdx >= 0 && words[wordIdx] && (
-        <div className="flex items-center gap-2 flex-1 min-w-0">
-          <div className="text-xs" style={{ color: 'var(--gic-muted)' }}>Now reading:</div>
-          <div className="font-semibold text-sm px-2 py-0.5 rounded" style={{ background: 'rgba(45,31,177,0.08)', color: 'var(--gic-blue)' }}>
-            {words.slice(Math.max(0,wordIdx-2), wordIdx+4).map((w,i) => (
-              <span key={i} style={i === Math.min(2,wordIdx) ? { background:'rgba(45,31,177,0.2)',borderRadius:'3px',padding:'0 2px'} : {}}>{w} </span>
-            ))}
-          </div>
+    <div className="mb-6 rounded-xl border overflow-hidden" style={{ borderColor:'var(--gic-blue)', background:'rgba(45,31,177,0.03)' }}>
+      <div className="flex items-center gap-2 px-4 py-3">
+        {/* Prev */}
+        <button onClick={handlePrev} disabled={activeBlock <= 0} className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-stone-100 disabled:opacity-30 transition">
+          <SkipBack size={14}/>
+        </button>
+        {/* Play / Pause */}
+        {playing
+          ? <button onClick={handlePause} className="w-10 h-10 rounded-full flex items-center justify-center text-white flex-shrink-0" style={{ background:'var(--gic-blue)' }}><Pause size={16}/></button>
+          : <button onClick={handlePlay}  className="w-10 h-10 rounded-full flex items-center justify-center text-white flex-shrink-0" style={{ background:'var(--gic-blue)' }}><Play  size={16}/></button>
+        }
+        {/* Next */}
+        <button onClick={handleNext} disabled={activeBlock >= blocks.length - 1} className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-stone-100 disabled:opacity-30 transition">
+          <SkipForward size={14}/>
+        </button>
+
+        {/* Caption / status */}
+        <div className="flex-1 min-w-0 ml-1">
+          {playing && wordIdx >= 0 && words.length > 0 ? (
+            <div className="text-xs leading-relaxed truncate" style={{ color:'var(--gic-ink)' }}>
+              {words.slice(Math.max(0, wordIdx - 3), wordIdx + 8).map((w, i) => {
+                const cur = Math.max(0, wordIdx - 3) + i === wordIdx;
+                return <span key={i} style={cur ? { background:'rgba(45,31,177,0.2)', borderRadius:'3px', padding:'1px 3px', fontWeight:600 } : {}}>{w} </span>;
+              })}
+            </div>
+          ) : (
+            <div className="text-xs" style={{ color:'var(--gic-muted)' }}>
+              {paused ? 'Paused — press play to continue' : `${readable} sections · Press play to listen`}
+            </div>
+          )}
         </div>
-      )}
+
+        {/* Block counter + speed + close */}
+        <div className="flex items-center gap-2 flex-shrink-0">
+          {activeBlock >= 0 && (
+            <span className="text-xs font-mono" style={{ color:'var(--gic-warm)' }}>{activeBlock + 1}/{blocks.length}</span>
+          )}
+          <select value={rate} onChange={e => handleRate(parseFloat(e.target.value))}
+            className="text-xs border rounded px-1.5 py-1" style={{ borderColor:'var(--gic-line)' }}>
+            <option value={0.75}>0.75×</option>
+            <option value={1}>1×</option>
+            <option value={1.25}>1.25×</option>
+            <option value={1.5}>1.5×</option>
+            <option value={2}>2×</option>
+          </select>
+          <button onClick={() => { handleStop(); setOpen(false); }}
+            className="w-6 h-6 flex items-center justify-center rounded hover:bg-stone-100" style={{ color:'var(--gic-muted)' }}>
+            <X size={12}/>
+          </button>
+        </div>
+      </div>
+
+      {/* Block progress dots — click any to jump */}
+      <div className="flex gap-1.5 px-4 pb-3 flex-wrap">
+        {blocks.map((b, i) => {
+          const has = !!blockText(b);
+          const isActive = i === activeBlock;
+          return (
+            <button key={i} onClick={() => speakFrom(i)} title={b.title || b.type}
+              style={{ width:8, height:8, borderRadius:'50%', flexShrink:0, transition:'all 0.2s',
+                background: isActive ? 'var(--gic-blue)' : has ? 'var(--gic-line)' : 'rgba(0,0,0,0.06)',
+                transform: isActive ? 'scale(1.4)' : 'scale(1)' }} />
+          );
+        })}
+      </div>
     </div>
   );
 }
