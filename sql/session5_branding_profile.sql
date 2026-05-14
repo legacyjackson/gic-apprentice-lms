@@ -42,12 +42,14 @@ insert into public.site_config (id) values (1) on conflict do nothing;
 alter table public.site_config enable row level security;
 
 -- Any authenticated user can read global site config
+drop policy if exists "site_config_select_authenticated" on public.site_config;
 create policy "site_config_select_authenticated"
   on public.site_config for select
   to authenticated
   using (true);
 
 -- Only admins and approvers can update
+drop policy if exists "site_config_update_admin" on public.site_config;
 create policy "site_config_update_admin"
   on public.site_config for update
   to authenticated
@@ -55,6 +57,7 @@ create policy "site_config_update_admin"
   with check (get_my_role() in ('admin', 'approver'));
 
 -- Only admins and approvers can upsert (needed for upsert() calls)
+drop policy if exists "site_config_insert_admin" on public.site_config;
 create policy "site_config_insert_admin"
   on public.site_config for insert
   to authenticated
