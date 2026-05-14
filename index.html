@@ -4755,8 +4755,13 @@ function AvatarCrop({ file, onSave, onClose }) {
     out.width=200; out.height=200;
     const ctx=out.getContext('2d');
     const r=200/SIZE;
+    // Fill white first — JPEG has no transparency, prevents black background
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, 200, 200);
+    ctx.save();
     ctx.beginPath(); ctx.arc(100,100,100,0,Math.PI*2); ctx.clip();
     ctx.drawImage(img, offset.x*r, offset.y*r, img.width*scale*r, img.height*scale*r);
+    ctx.restore();
     out.toBlob(blob=>onSave(blob), 'image/jpeg', 0.9);
   };
 
@@ -4818,14 +4823,20 @@ function LogoCrop({ file, onSave, onClose }) {
     const canvas = canvasRef.current;
     if (!img || !canvas) return;
     const ctx = canvas.getContext('2d');
-    // Clear to fully transparent — CSS checkerboard background shows through
     ctx.clearRect(0, 0, SIZE, SIZE);
-    // Optional white fill if user requested it
-    if (bgWhite) {
+    // Draw checkerboard so transparent PNG areas are visible (not black)
+    if (!bgWhite) {
+      const sq = 12;
+      for (let row = 0; row < Math.ceil(SIZE / sq); row++) {
+        for (let col = 0; col < Math.ceil(SIZE / sq); col++) {
+          ctx.fillStyle = (row + col) % 2 === 0 ? '#e5e7eb' : '#ffffff';
+          ctx.fillRect(col * sq, row * sq, sq, sq);
+        }
+      }
+    } else {
       ctx.fillStyle = '#ffffff';
       ctx.fillRect(0, 0, SIZE, SIZE);
     }
-    // Draw the image — transparent areas remain transparent, showing CSS checkerboard
     ctx.drawImage(img, offset.x, offset.y, img.width * scale, img.height * scale);
     // Border
     ctx.strokeStyle = '#2D1FB1';
@@ -4862,12 +4873,7 @@ function LogoCrop({ file, onSave, onClose }) {
 
         <div className="flex justify-center mb-3">
           <canvas ref={canvasRef} width={SIZE} height={SIZE}
-            style={{
-              borderRadius: '8px', cursor: dragging ? 'grabbing' : 'grab',
-              touchAction: 'none', userSelect: 'none', display: 'block',
-              // CSS checkerboard — shows through transparent PNG areas, never black
-              background: 'repeating-conic-gradient(#e5e7eb 0% 25%, #ffffff 0% 50%) 0 0 / 20px 20px'
-            }}
+            style={{ borderRadius: '8px', cursor: dragging ? 'grabbing' : 'grab', touchAction: 'none', userSelect: 'none', display: 'block' }}
             onMouseDown={onMouseDown} onMouseMove={onMouseMove} onMouseUp={onMouseUp} onMouseLeave={onMouseUp}
             onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onMouseUp} />
         </div>
