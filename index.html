@@ -33,7 +33,7 @@
     "react-dom":              "https://esm.sh/react-dom@18.3.1",
     "react-dom/client":       "https://esm.sh/react-dom@18.3.1/client",
     "lucide-react":           "https://esm.sh/lucide-react@0.383.0?deps=react@18.3.1",
-    "@supabase/supabase-js":  "https://esm.sh/@supabase/supabase-js@2.68.0"
+    "@supabase/supabase-js":  "https://esm.sh/@supabase/supabase-js@2.58.0"
   }
 }
 </script>
@@ -323,34 +323,45 @@ function useAuth() {
     if (!supabase) { setLoading(false); return; }
     let mounted = true;
 
-    supabase.auth.getSession().then(({ data }) => {
-      if (!mounted) return;
-      setSession(data.session || null);
-      if (!data.session) setLoading(false);
-    });
+    // Hard deadline: if auth never resolves (stale token, network issue, RLS hang) clear the spinner
+    const deadline = setTimeout(() => { if (mounted) setLoading(false); }, 6000);
+    const done = () => { clearTimeout(deadline); };
+
+    supabase.auth.getSession()
+      .then(({ data }) => {
+        if (!mounted) return;
+        setSession(data.session || null);
+        if (!data.session) { done(); setLoading(false); }
+      })
+      .catch(() => { if (mounted) { done(); setLoading(false); } });
 
     const { data: sub } = supabase.auth.onAuthStateChange((_event, sess) => {
       if (!mounted) return;
       setSession(sess || null);
-      if (!sess) { setProfile(null); setLoading(false); }
+      if (!sess) { done(); setProfile(null); setLoading(false); }
     });
 
-    return () => { mounted = false; sub.subscription.unsubscribe(); };
+    return () => { mounted = false; clearTimeout(deadline); sub.subscription.unsubscribe(); };
   }, []);
 
   useEffect(() => {
     if (!session) return;
     let mounted = true;
     (async () => {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', session.user.id)
-        .maybeSingle();
-      if (!mounted) return;
-      if (data) setProfile(data);
-      else setProfile({ id: session.user.id, email: session.user.email, role: 'apprentice', full_name: session.user.email.split('@')[0] });
-      setLoading(false);
+      try {
+        const { data } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', session.user.id)
+          .maybeSingle();
+        if (!mounted) return;
+        if (data) setProfile(data);
+        else setProfile({ id: session.user.id, email: session.user.email, role: 'apprentice', full_name: session.user.email.split('@')[0] });
+      } catch (_) {
+        if (mounted) setProfile({ id: session.user.id, email: session.user.email, role: 'apprentice', full_name: session.user.email.split('@')[0] });
+      } finally {
+        if (mounted) setLoading(false);
+      }
     })();
     return () => { mounted = false; };
   }, [session]);
