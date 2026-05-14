@@ -4017,7 +4017,7 @@ function ModuleEditor({ mod, onClose, onSaved }) {
 // ============================================================
 // SITE SETTINGS (admin only)
 // ============================================================
-function SiteSettings({ profile, onClose }) {
+function SiteSettings({ profile, onClose, onBrandingSaved }) {
   const [primary, setPrimary]   = useState('#2D1FB1');
   const [secondary, setSecondary] = useState('#1A1080');
   const [logoUrl, setLogoUrl]   = useState('');
@@ -4050,10 +4050,12 @@ function SiteSettings({ profile, onClose }) {
     });
     setSaving(false);
     if (error) { setErr(error.message); return; }
-    // Apply immediately
+    // Apply colors immediately
     document.documentElement.style.setProperty('--gic-blue', primary);
     document.documentElement.style.setProperty('--gic-blue-2', secondary);
-    setOk('Site settings saved. Reload the page to see all changes applied.');
+    // Apply logo immediately sitewide — no reload needed
+    onBrandingSaved && onBrandingSaved(logoUrl);
+    setOk('Saved and applied sitewide.');
   };
 
   const reset = () => { setPrimary('#2D1FB1'); setSecondary('#1A1080'); setLogoUrl(''); };
@@ -4159,33 +4161,57 @@ function SiteSettings({ profile, onClose }) {
 // useBranding — fetches site_config / sponsor brand, applies CSS vars
 // ============================================================
 function useBranding(profile) {
-  const [logo, setLogo] = useState(null);
+  const [logo, setLogo]             = useState(null);
+  const [refreshKey, setRefreshKey] = useState(0);
 
+  const refresh = useCallback(() => setRefreshKey(k => k + 1), []);
+
+  const applyBranding = useCallback((branding) => {
+    if (!branding) return;
+    if (branding.primary_color) {
+      document.documentElement.style.setProperty('--gic-blue', branding.primary_color);
+      document.documentElement.style.setProperty('--gic-blue-2', branding.secondary_color || branding.primary_color);
+    }
+    setLogo(branding.logo_url || null);
+  }, []);
+
+  // Fetch on mount / profile change / manual refresh
   useEffect(() => {
     if (!supabase || !profile) return;
     let mounted = true;
     (async () => {
-      // 1. Fetch global site config
       const { data: cfg } = await supabase.from('site_config').select('*').eq('id', 1).single();
-      // 2. If user has a sponsor, that overrides global
-      let branding = cfg;
+      let branding = cfg ? { primary_color: cfg.primary_color, secondary_color: cfg.secondary_color, logo_url: cfg.logo_url } : null;
       if (profile.sponsor_id) {
         const { data: sp } = await supabase.from('employer_sponsors')
-          .select('brand_primary,brand_secondary,brand_logo_url,name')
+          .select('brand_primary,brand_secondary,brand_logo_url')
           .eq('id', profile.sponsor_id).single();
         if (sp?.brand_primary) branding = { primary_color: sp.brand_primary, secondary_color: sp.brand_secondary, logo_url: sp.brand_logo_url };
       }
-      if (!mounted) return;
-      if (branding?.primary_color) {
-        document.documentElement.style.setProperty('--gic-blue', branding.primary_color);
-        document.documentElement.style.setProperty('--gic-blue-2', branding.secondary_color || branding.primary_color);
-      }
-      if (branding?.logo_url) setLogo(branding.logo_url);
+      if (mounted) applyBranding(branding);
     })();
     return () => { mounted = false; };
-  }, [profile?.id, profile?.sponsor_id]);
+  }, [profile?.id, profile?.sponsor_id, refreshKey, applyBranding]);
 
-  return logo;
+  // Realtime: update instantly when site_config is saved by any admin
+  useEffect(() => {
+    if (!supabase) return;
+    const channel = supabase.channel('branding-live')
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'site_config' }, payload => {
+        if (!profile?.sponsor_id && payload.new) {
+          applyBranding({ primary_color: payload.new.primary_color, secondary_color: payload.new.secondary_color, logo_url: payload.new.logo_url });
+        }
+      })
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'employer_sponsors' }, payload => {
+        if (profile?.sponsor_id && payload.new?.id === profile.sponsor_id && payload.new?.brand_primary) {
+          applyBranding({ primary_color: payload.new.brand_primary, secondary_color: payload.new.brand_secondary, logo_url: payload.new.brand_logo_url });
+        }
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [profile?.id, profile?.sponsor_id, applyBranding]);
+
+  return { logo, refresh, setLogo };
 }
 
 // ============================================================
@@ -4355,7 +4381,7 @@ function App({ profile, signOut }) {
   const [showProfile, setShowProfile]               = useState(false);
   const [showSiteSettings, setShowSiteSettings]     = useState(false);
   const [earnedCert, setEarnedCert]                 = useState(null);
-  const brandLogo = useBranding(profileData);
+  const { logo: brandLogo, refresh: refreshBranding, setLogo: setBrandLogo } = useBranding(profileData);
 
   // Load modules
   useEffect(() => {
@@ -4645,6 +4671,10 @@ function App({ profile, signOut }) {
         <SiteSettings
           profile={profileData}
           onClose={() => setShowSiteSettings(false)}
+          onBrandingSaved={(newLogoUrl) => {
+            setBrandLogo(newLogoUrl || null);
+            refreshBranding();
+          }}
         />
       )}
       {earnedCert && (
