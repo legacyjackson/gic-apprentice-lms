@@ -401,12 +401,15 @@ function SetupNeeded() {
 // ============================================================
 // LOADING FULL SCREEN
 // ============================================================
+const APP_VERSION = 'v2026.05.14-r2';
+
 function LoadingScreen() {
   return (
     <div className="min-h-screen flex items-center justify-center" style={{ background: 'var(--gic-bone)' }}>
       <div className="flex flex-col items-center gap-4">
         <Loader2 className="animate-spin" size={32} style={{ color: 'var(--gic-blue)' }} />
         <div className="eyebrow">Loading</div>
+        <div className="text-xs" style={{ color: 'var(--gic-line)' }}>{APP_VERSION}</div>
       </div>
     </div>
   );
