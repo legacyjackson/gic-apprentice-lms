@@ -3837,6 +3837,10 @@ function ModuleEditor({ mod, onClose, onSaved }) {
     const { data, error: err } = await supabase.from('modules').update({
       title, short_description: desc, learning_objectives: objs,
       content: { ...(mod.content||{}), lessons: finalLessons },
+      status: 'draft',
+      approved_by: null,
+      approved_by_email: null,
+      approved_at: null,
       updated_at: new Date().toISOString()
     }).eq('id', mod.id).select().single();
     setSaving(false);
