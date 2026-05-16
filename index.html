@@ -671,7 +671,17 @@ function BrandMark() { return null; }
 // ============================================================
 // HEADER
 // ============================================================
-function Header({ profile, onSignOut, currentView, onNavigate, onOpenCoach, coachAvailable, logo, onOpenProfile, onOpenSiteSettings }) {
+function NavBadge({ count }) {
+  if (!count || count < 1) return null;
+  return (
+    <span className="inline-flex items-center justify-center rounded-full text-white font-bold"
+      style={{ background: 'var(--gic-rose)', fontSize: 10, minWidth: 17, height: 17, padding: '0 4px', lineHeight: 1 }}>
+      {count > 99 ? '99+' : count}
+    </span>
+  );
+}
+
+function Header({ profile, onSignOut, currentView, onNavigate, onOpenCoach, coachAvailable, logo, onOpenProfile, onOpenSiteSettings, mentorBadge, progressBadge }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const isAdmin  = profile?.role === 'admin' || profile?.role === 'approver';
   const isMentor = profile?.role === 'mentor';
@@ -696,9 +706,10 @@ function Header({ profile, onSignOut, currentView, onNavigate, onOpenCoach, coac
           </button>
           {!isAdmin && !isMentor && (
             <button onClick={() => onNavigate('apprentice')}
-                    className="btn-ghost"
+                    className="btn-ghost flex items-center gap-1.5"
                     style={currentView === 'apprentice' ? { color: 'var(--gic-blue)' } : {}}>
               My Progress
+              <NavBadge count={progressBadge} />
             </button>
           )}
           {(isMentor || isAdmin) && (
@@ -707,6 +718,7 @@ function Header({ profile, onSignOut, currentView, onNavigate, onOpenCoach, coac
                     style={currentView === 'mentor' ? { color: 'var(--gic-blue)' } : {}}>
               <UserCheck size={14} />
               Mentor
+              <NavBadge count={mentorBadge} />
             </button>
           )}
           {isAdmin && (
@@ -786,13 +798,13 @@ function Header({ profile, onSignOut, currentView, onNavigate, onOpenCoach, coac
                     {!isAdmin && !isMentor && (
                       <button onClick={() => { setMenuOpen(false); onNavigate('apprentice'); }}
                               className="w-full text-left px-4 py-2.5 hover:bg-stone-50 flex items-center gap-2 text-sm">
-                        <Target size={14} /> My Progress
+                        <Target size={14} /> My Progress <NavBadge count={progressBadge} />
                       </button>
                     )}
                     {(isMentor || isAdmin) && (
                       <button onClick={() => { setMenuOpen(false); onNavigate('mentor'); }}
                               className="w-full text-left px-4 py-2.5 hover:bg-stone-50 flex items-center gap-2 text-sm">
-                        <UserCheck size={14} /> Mentor dashboard
+                        <UserCheck size={14} /> Mentor dashboard <NavBadge count={mentorBadge} />
                       </button>
                     )}
                     {isAdmin && (
@@ -991,22 +1003,59 @@ function ApprenticeDashboard({ modules, progress, profile, onOpenModule }) {
         } />
       </section>
 
-      {/* Final Exam card — only when all visible approved modules are complete */}
+      {/* Final Exam card */}
       {!isAdmin && (() => {
         const approvedMods = modules.filter(m => m.status === 'approved');
-        const completedCount = progress.filter(p => p.status === 'completed').length;
-        const allDone = approvedMods.length >= 32 && completedCount >= approvedMods.length;
-        if (!allDone) return null;
+        const completedCount = progress.filter(p => p.status === 'completed' && approvedMods.find(m => m.id === p.module_id)).length;
+        const allDone = approvedMods.length > 0 && completedCount >= approvedMods.length;
+        const earlyAccess = profile?.exam_early_access === true;
+        const pct = approvedMods.length > 0 ? Math.round((completedCount / approvedMods.length) * 100) : 0;
+        const unlocked = allDone || earlyAccess;
+        if (pct < 50 && !earlyAccess) return null;
         return (
-          <section className="mb-12 gic-card p-8 flex items-center justify-between" style={{ background: 'rgba(45,31,177,0.03)', borderColor: 'var(--gic-blue)' }}>
-            <div>
-              <div className="eyebrow mb-2" style={{ color: 'var(--gic-blue)' }}>Final Assessment</div>
-              <div className="font-display text-2xl font-semibold mb-1">You've completed all modules.</div>
-              <div className="text-sm" style={{ color: 'var(--gic-muted)' }}>Take the final comprehensive exam to earn your Wealth Solutions Counselor certificate.</div>
+          <section className="mb-12 gic-card p-8" style={{
+            background: unlocked ? 'rgba(45,31,177,0.03)' : 'rgba(45,31,177,0.015)',
+            borderColor: unlocked ? 'var(--gic-blue)' : 'var(--gic-line)'
+          }}>
+            <div className="flex items-center justify-between gap-6">
+              <div>
+                <div className="eyebrow mb-2 flex items-center gap-2" style={{ color: unlocked ? 'var(--gic-blue)' : 'var(--gic-muted)' }}>
+                  <Award size={12}/> Final Assessment
+                  {earlyAccess && !allDone && (
+                    <span className="badge" style={{ color: 'var(--gic-green)', background: 'rgba(31,122,74,0.08)' }}>Early access granted</span>
+                  )}
+                </div>
+                <div className="font-display text-2xl font-semibold mb-1">
+                  {unlocked ? (allDone ? "You've completed all modules." : "Early exam access granted.") : `${pct}% complete — almost there.`}
+                </div>
+                <div className="text-sm" style={{ color: 'var(--gic-muted)' }}>
+                  {unlocked
+                    ? 'Take the final comprehensive exam to earn your Wealth Solutions Counselor certificate.'
+                    : `Complete all ${approvedMods.length} modules to unlock the final exam. You can also request early access from your mentor.`}
+                </div>
+              </div>
+              <div className="flex flex-col gap-2 flex-shrink-0">
+                {unlocked ? (
+                  <button onClick={() => onOpenModule({ __finalExam: true })} className="btn-primary flex items-center gap-2">
+                    <Award size={15}/> Take Final Exam
+                  </button>
+                ) : (
+                  <button onClick={() => onOpenModule({ __examAccessRequest: true })} className="btn-secondary flex items-center gap-2 text-sm">
+                    <Send size={13}/> Request early access
+                  </button>
+                )}
+              </div>
             </div>
-            <button onClick={() => onOpenModule({ __finalExam: true })} className="btn-primary flex items-center gap-2">
-              <Award size={15}/> Take Final Exam
-            </button>
+            {!unlocked && (
+              <div className="mt-4 pt-4 border-t" style={{ borderColor: 'var(--gic-line)' }}>
+                <div className="flex items-center justify-between text-xs mb-1" style={{ color: 'var(--gic-muted)' }}>
+                  <span>Progress toward final exam</span><span>{completedCount}/{approvedMods.length} modules</span>
+                </div>
+                <div className="rounded-full overflow-hidden" style={{ height: 6, background: 'var(--gic-line)' }}>
+                  <div style={{ width: `${pct}%`, height: '100%', background: 'var(--gic-blue)', transition: 'width 0.6s ease' }} />
+                </div>
+              </div>
+            )}
           </section>
         );
       })()}
@@ -1922,6 +1971,85 @@ function AdminModuleRow({ module: mod, onOpen, onApprove, onEdit, canApprove, on
 }
 
 // ============================================================
+// EXAM ACCESS REQUEST MODAL — apprentice requests early exam access
+// ============================================================
+function ExamAccessRequestModal({ profile, onClose, onSubmitted }) {
+  const [reason, setReason] = useState('');
+  const [sending, setSending] = useState(false);
+  const [done, setDone] = useState(false);
+  const [error, setError] = useState('');
+
+  const submit = async () => {
+    if (!reason.trim() || !supabase) return;
+    setSending(true);
+    setError('');
+    const { error: e } = await supabase.from('questions').insert({
+      asker_id:     profile.id,
+      module_number: 0,
+      lesson_title: 'Exam Access Request',
+      question_text: reason.trim(),
+      status: 'open'
+    });
+    setSending(false);
+    if (e) { setError(e.message); return; }
+    setDone(true);
+    onSubmitted && onSubmitted();
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(15,22,49,0.6)', backdropFilter: 'blur(6px)' }}>
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg">
+        <div className="p-6 border-b flex items-center justify-between" style={{ borderColor: 'var(--gic-line)' }}>
+          <div>
+            <div className="eyebrow mb-1">Final Exam</div>
+            <div className="font-display text-xl font-semibold">Request early access</div>
+          </div>
+          <button onClick={onClose} className="btn-ghost"><X size={18}/></button>
+        </div>
+        <div className="p-6">
+          {done ? (
+            <div className="text-center py-6">
+              <CheckCircle2 size={36} className="mx-auto mb-3" style={{ color: 'var(--gic-green)' }}/>
+              <div className="font-semibold mb-1">Request submitted</div>
+              <div className="text-sm" style={{ color: 'var(--gic-muted)' }}>Your mentor or admin will review your request and grant access if appropriate.</div>
+              <button onClick={onClose} className="btn-primary mt-5">Close</button>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <p className="text-sm leading-relaxed" style={{ color: 'var(--gic-muted)' }}>
+                Explain why you're ready to take the final exam before completing all modules. Your mentor will review this request and may grant early access.
+              </p>
+              <div>
+                <label className="eyebrow block mb-2">Your explanation</label>
+                <textarea
+                  className="gic-input min-h-[130px] resize-y"
+                  placeholder="E.g. I have prior industry experience in areas covered by the remaining modules, or I have completed equivalent training elsewhere…"
+                  value={reason}
+                  onChange={e => setReason(e.target.value)}
+                  maxLength={1500}
+                />
+                <div className="text-xs mt-1 text-right" style={{ color: 'var(--gic-warm)' }}>{reason.length}/1500</div>
+              </div>
+              {error && (
+                <div className="text-sm p-3 rounded-lg flex items-start gap-2" style={{ background: 'rgba(184,61,92,0.06)', color: 'var(--gic-rose)' }}>
+                  <AlertCircle size={15} className="flex-shrink-0 mt-0.5"/>{error}
+                </div>
+              )}
+              <div className="flex gap-3 pt-1">
+                <button onClick={onClose} className="btn-secondary flex-1">Cancel</button>
+                <button onClick={submit} disabled={!reason.trim() || sending} className="btn-primary flex-1 flex items-center justify-center gap-2">
+                  <Send size={13}/>{sending ? 'Submitting…' : 'Submit request'}
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================
 // RECORDER MODAL — video capture + upload to DO Spaces
 // ============================================================
 function RecorderModal({ module: mod, profile, onClose, onSubmitted }) {
@@ -1935,9 +2063,19 @@ function RecorderModal({ module: mod, profile, onClose, onSubmitted }) {
   const [notes, setNotes] = useState('');
   const [error, setError] = useState('');
   const [uploadPct, setUploadPct] = useState(0);
+  const [camPerm, setCamPerm] = useState('unknown'); // unknown | granted | prompt | denied
   const videoRef = useRef(null);
   const timerRef = useRef(null);
   const startedAtRef = useRef(0);
+
+  // Check camera permission state without requesting access
+  useEffect(() => {
+    if (!navigator.permissions) return;
+    navigator.permissions.query({ name: 'camera' }).then(result => {
+      setCamPerm(result.state);
+      result.onchange = () => setCamPerm(result.state);
+    }).catch(() => {});
+  }, []);
 
   // Hook camera up to preview <video>
   useEffect(() => {
@@ -1955,14 +2093,26 @@ function RecorderModal({ module: mod, profile, onClose, onSubmitted }) {
 
   const startCamera = async () => {
     setError('');
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setError('Camera recording is not supported in this browser. Try Chrome or Edge.');
+      return;
+    }
     try {
       const s = await navigator.mediaDevices.getUserMedia({
         video: { width: { ideal: 1280 }, height: { ideal: 720 } },
         audio: true
       });
       setStream(s);
+      setCamPerm('granted');
     } catch (e) {
-      setError('Camera/microphone access denied. Check browser permissions.');
+      if (e.name === 'NotAllowedError' || e.name === 'PermissionDeniedError') {
+        setCamPerm('denied');
+        setError('Camera access was blocked. To fix: click the camera icon in your browser address bar and allow access, then refresh this page.');
+      } else if (e.name === 'NotFoundError') {
+        setError('No camera or microphone found. Please connect a device and try again.');
+      } else {
+        setError('Could not start camera: ' + (e.message || e.name));
+      }
     }
   };
 
@@ -2089,11 +2239,27 @@ function RecorderModal({ module: mod, profile, onClose, onSubmitted }) {
                   <li>· Keep recordings under 30 minutes</li>
                 </ul>
               </div>
-              {!stream ? (
+              {camPerm === 'denied' && !stream && (
+                <div className="p-4 rounded-lg border-l-4" style={{ borderColor: 'var(--gic-rose)', background: 'rgba(184,61,92,0.06)' }}>
+                  <div className="flex items-start gap-2 mb-2">
+                    <AlertCircle size={16} className="flex-shrink-0 mt-0.5" style={{ color: 'var(--gic-rose)' }}/>
+                    <div className="text-sm font-semibold" style={{ color: 'var(--gic-rose)' }}>Camera access is blocked</div>
+                  </div>
+                  <div className="text-sm ml-6" style={{ color: 'var(--gic-ink)' }}>
+                    To record a submission:
+                    <ol className="mt-1 space-y-0.5 list-decimal list-inside" style={{ color: 'var(--gic-muted)' }}>
+                      <li>Click the camera/lock icon in your browser address bar</li>
+                      <li>Set Camera and Microphone to <strong>Allow</strong></li>
+                      <li>Reload this page and try again</li>
+                    </ol>
+                  </div>
+                </div>
+              )}
+              {!stream && camPerm !== 'denied' ? (
                 <button onClick={startCamera} className="btn-primary w-full flex items-center justify-center gap-2">
                   <Video size={16}/> Enable camera & microphone
                 </button>
-              ) : (
+              ) : stream ? (
                 <>
                   <div className="aspect-video rounded-lg overflow-hidden bg-stone-900">
                     <video ref={videoRef} autoPlay muted playsInline className="w-full h-full object-cover" />
@@ -2102,7 +2268,7 @@ function RecorderModal({ module: mod, profile, onClose, onSubmitted }) {
                     <Mic size={16}/> Start recording
                   </button>
                 </>
-              )}
+              ) : null}
               {error && (
                 <div className="text-sm p-3 border-l-2 flex items-start gap-2" style={{ borderColor: 'var(--gic-rose)', background: 'rgba(184,61,92,0.06)', color: 'var(--gic-rose)' }}>
                   <AlertCircle size={16} className="flex-shrink-0 mt-0.5"/>
@@ -2606,6 +2772,24 @@ function MentorDashboard({ profile, modules, onViewSubmission }) {
     setQuestions(prev => prev.map(x => x.id === q.id ? { ...x, status: 'resolved' } : x));
   };
 
+  const grantExamAccess = async (q) => {
+    if (!supabase) return;
+    if (!confirm(`Grant early exam access to this apprentice?`)) return;
+    const { error } = await supabase.from('profiles').update({ exam_early_access: true }).eq('id', q.asker_id);
+    if (error) { alert('Failed: ' + error.message); return; }
+    const noteText = (answerTexts[q.id] || '').trim() ||
+      'Your request has been approved. You now have early access to the final exam. Good luck!';
+    await supabase.from('question_answers').insert({
+      question_id: q.id,
+      responder_id: profile.id,
+      responder_name: profile.full_name || profile.email || 'Mentor',
+      answer_text: noteText
+    });
+    await supabase.from('questions').update({ status: 'resolved', updated_at: new Date().toISOString() }).eq('id', q.id);
+    setQuestions(prev => prev.map(x => x.id === q.id ? { ...x, status: 'resolved' } : x));
+    setAnswerTexts(prev => ({ ...prev, [q.id]: '' }));
+  };
+
   const pending = submissions.filter(s => s.status === 'submitted' || s.status === 'under_review');
   const display = filter === 'pending' ? pending : submissions;
 
@@ -2762,10 +2946,13 @@ function MentorDashboard({ profile, modules, onViewSubmission }) {
                 <div key={q.id} className="gic-card p-6">
                   <div className="flex items-start justify-between gap-4 mb-3">
                     <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-1">
+                      <div className="flex items-center gap-2 mb-1 flex-wrap">
                         {asker && <span className="text-xs font-semibold">{asker.full_name || asker.email}</span>}
-                        {q.lesson_title && <span className="eyebrow">{q.lesson_title}</span>}
-                        {q.module_number && <span className="text-xs" style={{ color: 'var(--gic-warm)' }}>Module {String(q.module_number).padStart(2,'0')}</span>}
+                        {q.lesson_title && q.lesson_title !== 'Exam Access Request' && <span className="eyebrow">{q.lesson_title}</span>}
+                        {q.lesson_title === 'Exam Access Request' && (
+                          <span className="badge" style={{ color: 'var(--gic-blue)', background: 'rgba(45,31,177,0.08)' }}>Exam Access Request</span>
+                        )}
+                        {q.module_number > 0 && <span className="text-xs" style={{ color: 'var(--gic-warm)' }}>Module {String(q.module_number).padStart(2,'0')}</span>}
                       </div>
                       <div className="font-semibold text-sm leading-relaxed">{q.question_text}</div>
                       <div className="text-xs mt-1" style={{ color: 'var(--gic-warm)' }}>{fmtRelative(q.created_at)}</div>
@@ -2779,10 +2966,20 @@ function MentorDashboard({ profile, modules, onViewSubmission }) {
                   </div>
                   {q.status === 'open' && (
                     <div className="mt-4 pt-4 border-t" style={{ borderColor: 'var(--gic-line)' }}>
+                      {q.lesson_title === 'Exam Access Request' && (
+                        <div className="mb-3 p-3 rounded-lg flex items-center justify-between" style={{ background: 'rgba(45,31,177,0.04)', border: '1px solid rgba(45,31,177,0.12)' }}>
+                          <div className="text-sm" style={{ color: 'var(--gic-ink)' }}>
+                            Grant early exam access to <strong>{asker?.full_name || asker?.email || 'this apprentice'}</strong>?
+                          </div>
+                          <button onClick={() => grantExamAccess(q)} className="btn-primary flex items-center gap-1.5 text-sm ml-4 flex-shrink-0">
+                            <Award size={13}/> Grant access
+                          </button>
+                        </div>
+                      )}
                       <textarea
                         value={answerTexts[q.id] || ''}
                         onChange={e => setAnswerTexts(prev => ({ ...prev, [q.id]: e.target.value }))}
-                        placeholder="Type your answer here…"
+                        placeholder={q.lesson_title === 'Exam Access Request' ? 'Add a note for the apprentice (optional)…' : 'Type your answer here…'}
                         rows={3}
                         className="w-full border rounded-lg p-3 text-sm mb-3 resize-none"
                         style={{ borderColor: 'var(--gic-line)' }}
@@ -3326,6 +3523,17 @@ function QuestionsPage({ profile }) {
   const [questions, setQuestions] = useState([]);
   const [answers, setAnswers] = useState({});
   const [loading, setLoading] = useState(true);
+  const [deleting, setDeleting] = useState(null);
+
+  const loadAnswers = async (ids) => {
+    if (!ids.length) return;
+    const { data: ans } = await supabase.from('question_answers').select('*').in('question_id', ids);
+    if (ans) {
+      const map = {};
+      ans.forEach(a => { if (!map[a.question_id]) map[a.question_id] = []; map[a.question_id].push(a); });
+      setAnswers(map);
+    }
+  };
 
   useEffect(() => {
     if (!supabase || !profile?.id) return;
@@ -3338,19 +3546,36 @@ function QuestionsPage({ profile }) {
         .order('created_at', { ascending: false });
       if (!mounted || !qs) return;
       setQuestions(qs);
-      const ids = qs.map(q => q.id);
-      if (ids.length > 0) {
-        const { data: ans } = await supabase.from('question_answers').select('*').in('question_id', ids);
-        if (ans && mounted) {
-          const map = {};
-          ans.forEach(a => { if (!map[a.question_id]) map[a.question_id] = []; map[a.question_id].push(a); });
-          setAnswers(map);
-        }
-      }
-      setLoading(false);
+      await loadAnswers(qs.map(q => q.id));
+      if (mounted) setLoading(false);
     })();
-    return () => { mounted = false; };
+
+    // Real-time: new answers to my questions
+    const answerChannel = supabase
+      .channel('my-question-answers-' + profile.id)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'question_answers' }, async (payload) => {
+        const qid = payload.new.question_id;
+        setAnswers(prev => ({
+          ...prev,
+          [qid]: [...(prev[qid] || []), payload.new]
+        }));
+        // Also mark question as resolved
+        setQuestions(prev => prev.map(q => q.id === qid ? { ...q, status: 'resolved' } : q));
+      })
+      .subscribe();
+
+    return () => { mounted = false; supabase.removeChannel(answerChannel); };
   }, [profile?.id]);
+
+  const deleteQuestion = async (q) => {
+    if (!confirm('Delete this question thread? This cannot be undone.')) return;
+    setDeleting(q.id);
+    await supabase.from('question_answers').delete().eq('question_id', q.id);
+    await supabase.from('questions').delete().eq('id', q.id);
+    setQuestions(prev => prev.filter(x => x.id !== q.id));
+    setAnswers(prev => { const next = { ...prev }; delete next[q.id]; return next; });
+    setDeleting(null);
+  };
 
   if (loading) return <div className="py-12 text-center"><LoadingScreen /></div>;
 
@@ -3367,32 +3592,60 @@ function QuestionsPage({ profile }) {
         </div>
       ) : (
         <div className="space-y-4">
-          {questions.map(q => (
-            <div key={q.id} className="gic-card p-6">
-              <div className="flex items-start justify-between gap-4 mb-3">
-                <div>
-                  {q.lesson_title && <div className="eyebrow mb-1">{q.lesson_title}</div>}
-                  <div className="font-semibold text-sm">{q.question_text}</div>
+          {questions.map(q => {
+            const qAnswers = answers[q.id] || [];
+            const hasAnswer = qAnswers.length > 0;
+            return (
+              <div key={q.id} className="gic-card p-6" style={hasAnswer ? { borderColor: 'rgba(31,122,74,0.3)' } : {}}>
+                <div className="flex items-start justify-between gap-4 mb-2">
+                  <div className="flex-1">
+                    {q.lesson_title && q.lesson_title !== 'Exam Access Request' && (
+                      <div className="eyebrow mb-1">{q.lesson_title}</div>
+                    )}
+                    {q.lesson_title === 'Exam Access Request' && (
+                      <div className="eyebrow mb-1" style={{ color: 'var(--gic-blue)' }}>Early Exam Access Request</div>
+                    )}
+                    <div className="font-semibold text-sm leading-relaxed">{q.question_text}</div>
+                  </div>
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    <span className="badge"
+                      style={q.status === 'resolved'
+                        ? { color: 'var(--gic-green)', background: 'rgba(31,122,74,0.08)' }
+                        : { color: 'var(--gic-amber)', background: 'rgba(200,132,28,0.08)' }}>
+                      {q.status === 'resolved' ? 'Answered' : 'Pending'}
+                    </span>
+                    <button onClick={() => deleteQuestion(q)} disabled={deleting === q.id}
+                      className="btn-ghost p-1 rounded" title="Delete question"
+                      style={{ color: 'var(--gic-warm)', opacity: deleting === q.id ? 0.4 : 1 }}>
+                      <Trash2 size={14}/>
+                    </button>
+                  </div>
                 </div>
-                <span className="badge flex-shrink-0"
-                  style={q.status === 'resolved'
-                    ? { color: 'var(--gic-green)', background: 'rgba(31,122,74,0.08)' }
-                    : { color: 'var(--gic-amber)', background: 'rgba(200,132,28,0.08)' }}>
-                  {q.status === 'resolved' ? 'Answered' : 'Pending'}
-                </span>
+                <div className="text-xs mb-3" style={{ color: 'var(--gic-warm)' }}>{fmtRelative(q.created_at)}</div>
+
+                {hasAnswer ? (
+                  <div className="mt-3 space-y-3">
+                    {qAnswers.map(a => (
+                      <div key={a.id} className="p-4 rounded-lg" style={{ background: 'rgba(31,122,74,0.05)', borderLeft: '3px solid var(--gic-green)' }}>
+                        <div className="flex items-center gap-2 mb-1.5">
+                          <div className="w-5 h-5 rounded-full flex items-center justify-center" style={{ background: 'var(--gic-green)', color: 'white' }}>
+                            <CheckCircle2 size={11}/>
+                          </div>
+                          <span className="text-xs font-semibold" style={{ color: 'var(--gic-green)' }}>{a.responder_name || 'Mentor'}</span>
+                          <span className="text-xs" style={{ color: 'var(--gic-warm)' }}>{fmtRelative(a.created_at)}</span>
+                        </div>
+                        <div className="text-sm leading-relaxed">{a.answer_text}</div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-xs mt-2 italic flex items-center gap-1.5" style={{ color: 'var(--gic-muted)' }}>
+                    <Clock size={11}/> Awaiting response from your mentor…
+                  </div>
+                )}
               </div>
-              <div className="text-xs mb-3" style={{ color: 'var(--gic-warm)' }}>{fmtRelative(q.created_at)}</div>
-              {(answers[q.id] || []).map(a => (
-                <div key={a.id} className="mt-3 pl-4 border-l-2 text-sm" style={{ borderColor: 'var(--gic-blue)' }}>
-                  <div className="font-semibold mb-0.5" style={{ color: 'var(--gic-blue)' }}>{a.responder_name || 'Mentor'}</div>
-                  <div className="leading-relaxed">{a.answer_text}</div>
-                </div>
-              ))}
-              {!(answers[q.id]||[]).length && (
-                <div className="text-xs mt-2 italic" style={{ color: 'var(--gic-muted)' }}>Awaiting response from your mentor…</div>
-              )}
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>
@@ -4391,6 +4644,9 @@ function App({ profile, signOut }) {
   const [showProfile, setShowProfile]               = useState(false);
   const [showSiteSettings, setShowSiteSettings]     = useState(false);
   const [earnedCert, setEarnedCert]                 = useState(null);
+  const [showExamAccessRequest, setShowExamAccessRequest] = useState(false);
+  const [mentorBadge, setMentorBadge]               = useState(0);
+  const [progressBadge, setProgressBadge]           = useState(0);
   const { logo: brandLogo, refresh: refreshBranding, setLogo: setBrandLogo } = useBranding(profileData);
 
   // Load modules
@@ -4475,6 +4731,35 @@ function App({ profile, signOut }) {
     return () => { mounted = false; supabase.removeChannel(channel); };
   }, [profile?.id]);
 
+  // Notification badge counts — lightweight, no joins
+  useEffect(() => {
+    if (!supabase || !profile?.id) return;
+    let mounted = true;
+    const isMentorOrAdmin = profile.role === 'mentor' || profile.role === 'admin' || profile.role === 'approver';
+    const isApprentice = profile.role === 'apprentice';
+
+    const fetchCounts = async () => {
+      if (isMentorOrAdmin) {
+        // Pending submissions + open questions
+        const [{ count: subCount }, { count: qCount }] = await Promise.all([
+          supabase.from('competency_submissions').select('*', { count: 'exact', head: true }).in('status', ['submitted', 'under_review']),
+          supabase.from('questions').select('*', { count: 'exact', head: true }).eq('status', 'open')
+        ]);
+        if (mounted) setMentorBadge((subCount || 0) + (qCount || 0));
+      }
+      if (isApprentice) {
+        // Unanswered questions for this user
+        const { data: myQs } = await supabase.from('questions').select('id').eq('asker_id', profile.id).eq('status', 'open');
+        if (mounted) setProgressBadge((myQs || []).length);
+      }
+    };
+
+    fetchCounts();
+    // Re-check every 60s for lightweight live-ish updates
+    const interval = setInterval(fetchCounts, 60000);
+    return () => { mounted = false; clearInterval(interval); };
+  }, [profile?.id, profile?.role]);
+
   const updateProgress = async (moduleId, updates) => {
     if (!supabase || !profile) return;
     const existing = progress.find(p => p.module_id === moduleId);
@@ -4533,6 +4818,7 @@ function App({ profile, signOut }) {
   };
 
   const handleOpen = (mod) => {
+    if (mod?.__examAccessRequest) { setShowExamAccessRequest(true); return; }
     setOpenModule(mod);
     setView('module');
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -4542,6 +4828,8 @@ function App({ profile, signOut }) {
     setView(v);
     setOpenModule(null);
     setCoachOpen(false);
+    if (v === 'mentor') setMentorBadge(0);
+    if (v === 'apprentice') setProgressBadge(0);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -4578,6 +4866,8 @@ function App({ profile, signOut }) {
         logo={brandLogo}
         onOpenProfile={() => setShowProfile(true)}
         onOpenSiteSettings={() => setShowSiteSettings(true)}
+        mentorBadge={mentorBadge}
+        progressBadge={progressBadge}
       />
 
       <div className="flex-1">
@@ -4689,6 +4979,13 @@ function App({ profile, signOut }) {
       )}
       {earnedCert && (
         <CertificateView cert={earnedCert} onClose={() => setEarnedCert(null)} />
+      )}
+      {showExamAccessRequest && (
+        <ExamAccessRequestModal
+          profile={profileData}
+          onClose={() => setShowExamAccessRequest(false)}
+          onSubmitted={() => setShowExamAccessRequest(false)}
+        />
       )}
     </div>
   );
