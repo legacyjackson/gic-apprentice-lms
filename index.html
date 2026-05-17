@@ -1018,7 +1018,7 @@ function ApprenticeDashboard({ modules, progress, profile, onOpenModule, waivers
         const earlyAccess = profile?.exam_early_access === true;
         const pct = approvedMods.length > 0 ? Math.round((completedCount / approvedMods.length) * 100) : 0;
         const unlocked = allDone || earlyAccess;
-        if (pct < 50 && !earlyAccess) return null;
+        if (approvedMods.length === 0) return null;
         return (
           <section className="mb-12 gic-card p-8" style={{
             background: unlocked ? 'rgba(45,31,177,0.03)' : 'rgba(45,31,177,0.015)',
