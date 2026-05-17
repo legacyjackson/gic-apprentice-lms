@@ -3089,6 +3089,8 @@ function MentorDashboard({ profile, modules, onViewSubmission }) {
   const [answerTexts, setAnswerTexts] = useState({}); // question_id -> text
   const [answerSending, setAnswerSending] = useState({}); // question_id -> bool
   const [qProfilesById, setQProfilesById] = useState({});
+  const [answersById, setAnswersById] = useState({}); // question_id -> answer[]
+  const [openThreadId, setOpenThreadId] = useState(null); // expanded question id
   // Waivers tab state
   const [waivers, setWaivers] = useState([]);
   const [waiversLoading, setWaiversLoading] = useState(false);
@@ -3156,13 +3158,17 @@ function MentorDashboard({ profile, modules, onViewSubmission }) {
         .order('created_at', { ascending: false });
       if (!mounted) return;
       setQuestions(qs || []);
-      // Fetch asker profiles
-      const ids = Array.from(new Set((qs||[]).map(q => q.asker_id)));
-      if (ids.length > 0) {
-        const { data: pp } = await supabase.from('profiles').select('id,full_name,email').in('id', ids);
-        const map = {}; (pp||[]).forEach(p => { map[p.id] = p; });
-        if (mounted) setQProfilesById(map);
-      }
+      const qIds = (qs || []).map(q => q.id);
+      // Fetch asker profiles and all existing answers in parallel
+      const [profileRes, answerRes] = await Promise.all([
+        supabase.from('profiles').select('id,full_name,email').in('id', Array.from(new Set((qs||[]).map(q => q.asker_id)))),
+        qIds.length ? supabase.from('question_answers').select('*').in('question_id', qIds).order('created_at', { ascending: true }) : { data: [] }
+      ]);
+      if (!mounted) return;
+      const pmap = {}; (profileRes.data||[]).forEach(p => { pmap[p.id] = p; });
+      setQProfilesById(pmap);
+      const amap = {}; (answerRes.data||[]).forEach(a => { if (!amap[a.question_id]) amap[a.question_id] = []; amap[a.question_id].push(a); });
+      setAnswersById(amap);
       if (mounted) setQuestionsLoading(false);
     })();
     return () => { mounted = false; };
@@ -3172,16 +3178,17 @@ function MentorDashboard({ profile, modules, onViewSubmission }) {
     const text = (answerTexts[q.id] || '').trim();
     if (!text || !supabase) return;
     setAnswerSending(prev => ({ ...prev, [q.id]: true }));
-    const { error } = await supabase.from('question_answers').insert({
+    const { data: newAnswer, error } = await supabase.from('question_answers').insert({
       question_id: q.id,
       responder_id: profile.id,
       responder_name: profile.full_name || profile.email || 'Mentor',
       answer_text: text
-    });
+    }).select().single();
     if (!error) {
       await supabase.from('questions').update({ status: 'resolved', updated_at: new Date().toISOString() }).eq('id', q.id);
       setQuestions(prev => prev.map(x => x.id === q.id ? { ...x, status: 'resolved' } : x));
       setAnswerTexts(prev => ({ ...prev, [q.id]: '' }));
+      if (newAnswer) setAnswersById(prev => ({ ...prev, [q.id]: [...(prev[q.id] || []), newAnswer] }));
       // Email the apprentice
       const asker = qProfilesById[q.asker_id];
       if (asker?.email) {
@@ -3416,13 +3423,17 @@ function MentorDashboard({ profile, modules, onViewSubmission }) {
             <p className="text-sm" style={{ color: 'var(--gic-muted)' }}>Apprentice questions from their lesson pages will appear here.</p>
           </div>
         ) : (
-          <div className="space-y-4">
+          <div className="space-y-3">
             {questions.map(q => {
               const asker = qProfilesById[q.asker_id];
+              const qAnswers = answersById[q.id] || [];
+              const isOpen = openThreadId === q.id;
               return (
-                <div key={q.id} className="gic-card p-6">
-                  <div className="flex items-start justify-between gap-4 mb-3">
-                    <div className="flex-1">
+                <div key={q.id} className="gic-card overflow-hidden">
+                  {/* Header row — click to expand */}
+                  <button className="w-full p-5 text-left flex items-start gap-4 hover:bg-stone-50 transition-colors"
+                    onClick={() => setOpenThreadId(isOpen ? null : q.id)}>
+                    <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1 flex-wrap">
                         {asker && <span className="text-xs font-semibold">{asker.full_name || asker.email}</span>}
                         {q.lesson_title && q.lesson_title !== 'Exam Access Request' && <span className="eyebrow">{q.lesson_title}</span>}
@@ -3432,19 +3443,46 @@ function MentorDashboard({ profile, modules, onViewSubmission }) {
                         {q.module_number > 0 && <span className="text-xs" style={{ color: 'var(--gic-warm)' }}>Module {String(q.module_number).padStart(2,'0')}</span>}
                       </div>
                       <div className="font-semibold text-sm leading-relaxed">{q.question_text}</div>
-                      <div className="text-xs mt-1" style={{ color: 'var(--gic-warm)' }}>{fmtRelative(q.created_at)}</div>
+                      <div className="flex items-center gap-3 mt-1">
+                        <span className="text-xs" style={{ color: 'var(--gic-warm)' }}>{fmtRelative(q.created_at)}</span>
+                        {qAnswers.length > 0 && <span className="text-xs" style={{ color: 'var(--gic-green)' }}>{qAnswers.length} response{qAnswers.length !== 1 ? 's' : ''}</span>}
+                      </div>
                     </div>
-                    <span className="badge flex-shrink-0"
-                      style={q.status === 'resolved'
-                        ? { color: 'var(--gic-green)', background: 'rgba(31,122,74,0.08)' }
-                        : { color: 'var(--gic-amber)', background: 'rgba(200,132,28,0.08)' }}>
-                      {q.status === 'resolved' ? 'Answered' : 'Open'}
-                    </span>
-                  </div>
-                  {q.status === 'open' && (
-                    <div className="mt-4 pt-4 border-t" style={{ borderColor: 'var(--gic-line)' }}>
-                      {q.lesson_title === 'Exam Access Request' && (
-                        <div className="mb-3 p-3 rounded-lg flex items-center justify-between" style={{ background: 'rgba(45,31,177,0.04)', border: '1px solid rgba(45,31,177,0.12)' }}>
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      <span className="badge"
+                        style={q.status === 'resolved'
+                          ? { color: 'var(--gic-green)', background: 'rgba(31,122,74,0.08)' }
+                          : { color: 'var(--gic-amber)', background: 'rgba(200,132,28,0.08)' }}>
+                        {q.status === 'resolved' ? 'Answered' : 'Open'}
+                      </span>
+                      <ChevronRight size={16} style={{ transform: isOpen ? 'rotate(90deg)' : 'none', transition: 'transform 0.2s', color: 'var(--gic-warm)' }}/>
+                    </div>
+                  </button>
+
+                  {/* Expanded thread */}
+                  {isOpen && (
+                    <div className="border-t px-5 pb-5 pt-4 space-y-4" style={{ borderColor: 'var(--gic-line)' }}>
+                      {/* Existing answers */}
+                      {qAnswers.length > 0 && (
+                        <div className="space-y-3">
+                          {qAnswers.map(a => (
+                            <div key={a.id} className="p-4 rounded-lg" style={{ background: 'rgba(31,122,74,0.05)', borderLeft: '3px solid var(--gic-green)' }}>
+                              <div className="flex items-center gap-2 mb-1.5">
+                                <div className="w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0" style={{ background: 'var(--gic-green)', color: 'white' }}>
+                                  <CheckCircle2 size={11}/>
+                                </div>
+                                <span className="text-xs font-semibold" style={{ color: 'var(--gic-green)' }}>{a.responder_name || 'Mentor'}</span>
+                                <span className="text-xs" style={{ color: 'var(--gic-warm)' }}>{fmtRelative(a.created_at)}</span>
+                              </div>
+                              <div className="text-sm leading-relaxed">{a.answer_text}</div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Exam access grant button */}
+                      {q.lesson_title === 'Exam Access Request' && q.status === 'open' && (
+                        <div className="p-3 rounded-lg flex items-center justify-between" style={{ background: 'rgba(45,31,177,0.04)', border: '1px solid rgba(45,31,177,0.12)' }}>
                           <div className="text-sm" style={{ color: 'var(--gic-ink)' }}>
                             Grant early exam access to <strong>{asker?.full_name || asker?.email || 'this apprentice'}</strong>?
                           </div>
@@ -3453,23 +3491,30 @@ function MentorDashboard({ profile, modules, onViewSubmission }) {
                           </button>
                         </div>
                       )}
-                      <textarea
-                        value={answerTexts[q.id] || ''}
-                        onChange={e => setAnswerTexts(prev => ({ ...prev, [q.id]: e.target.value }))}
-                        placeholder={q.lesson_title === 'Exam Access Request' ? 'Add a note for the apprentice (optional)…' : 'Type your answer here…'}
-                        rows={3}
-                        className="w-full border rounded-lg p-3 text-sm mb-3 resize-none"
-                        style={{ borderColor: 'var(--gic-line)' }}
-                      />
-                      <div className="flex items-center gap-2">
-                        <button onClick={() => sendAnswer(q)}
-                          disabled={!(answerTexts[q.id]||'').trim() || answerSending[q.id]}
-                          className="btn-primary flex items-center gap-2 text-sm">
-                          <Send size={13}/> {answerSending[q.id] ? 'Sending…' : 'Send response'}
-                        </button>
-                        <button onClick={() => markResolved(q)} className="btn-ghost text-sm" style={{ color: 'var(--gic-muted)' }}>
-                          Mark resolved
-                        </button>
+
+                      {/* Reply box — always visible when thread is open */}
+                      <div>
+                        <div className="eyebrow mb-2">{qAnswers.length > 0 ? 'Add a follow-up' : 'Write a response'}</div>
+                        <textarea
+                          value={answerTexts[q.id] || ''}
+                          onChange={e => setAnswerTexts(prev => ({ ...prev, [q.id]: e.target.value }))}
+                          placeholder="Type your response here…"
+                          rows={3}
+                          className="w-full border rounded-lg p-3 text-sm mb-3 resize-none"
+                          style={{ borderColor: 'var(--gic-line)' }}
+                        />
+                        <div className="flex items-center gap-2">
+                          <button onClick={() => sendAnswer(q)}
+                            disabled={!(answerTexts[q.id]||'').trim() || answerSending[q.id]}
+                            className="btn-primary flex items-center gap-2 text-sm">
+                            <Send size={13}/>{answerSending[q.id] ? 'Sending…' : 'Send response'}
+                          </button>
+                          {q.status === 'open' && (
+                            <button onClick={() => markResolved(q)} className="btn-ghost text-sm" style={{ color: 'var(--gic-muted)' }}>
+                              Mark resolved
+                            </button>
+                          )}
+                        </div>
                       </div>
                     </div>
                   )}
