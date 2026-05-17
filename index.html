@@ -889,7 +889,7 @@ function Footer() {
 // ============================================================
 // MODULE CARD
 // ============================================================
-function ModuleCard({ module: mod, progress, onOpen, isAdmin }) {
+function ModuleCard({ module: mod, progress, onOpen, isAdmin, locked, waiverStatus }) {
   const Icon = moduleIcon(mod.module_number);
   const band = competencyColor(mod.module_number);
   const palette = COLOR_BANDS[band];
@@ -902,7 +902,8 @@ function ModuleCard({ module: mod, progress, onOpen, isAdmin }) {
 
   return (
     <button onClick={() => onOpen(mod)}
-            className="gic-card gic-card-hover p-6 text-left flex flex-col group transition-all animate-fade-in">
+            className="gic-card gic-card-hover p-6 text-left flex flex-col group transition-all animate-fade-in"
+            style={locked ? { opacity: 0.7 } : {}}>
       <div className="flex items-start justify-between mb-4">
         <div className="w-12 h-12 rounded flex items-center justify-center"
              style={{ background: palette.pale, color: palette.accent }}>
@@ -941,13 +942,19 @@ function ModuleCard({ module: mod, progress, onOpen, isAdmin }) {
               <Sparkles size={10} />Awaiting Review
             </span>
           )}
-          {isCompleted && <CheckCircle2 size={18} style={{ color: 'var(--gic-green)' }} />}
-          {isInProgress && !isCompleted && (
+          {locked && (
+            <span className="badge flex items-center gap-1" style={{ color: 'var(--gic-amber)', background: 'rgba(200,132,28,0.08)' }}>
+              <Lock size={9}/>
+              {waiverStatus === 'pending' ? 'Requested' : 'Locked'}
+            </span>
+          )}
+          {!locked && isCompleted && <CheckCircle2 size={18} style={{ color: 'var(--gic-green)' }} />}
+          {!locked && isInProgress && !isCompleted && (
             <span className="text-xs font-semibold" style={{ color: 'var(--gic-blue)' }}>
               {pct ? `${pct}%` : 'In progress'}
             </span>
           )}
-          {!isCompleted && !isInProgress && !isApproved && (
+          {!locked && !isCompleted && !isInProgress && !isApproved && (
             <Lock size={14} style={{ color: 'var(--gic-warm)' }} />
           )}
         </div>
@@ -959,7 +966,7 @@ function ModuleCard({ module: mod, progress, onOpen, isAdmin }) {
 // ============================================================
 // APPRENTICE DASHBOARD
 // ============================================================
-function ApprenticeDashboard({ modules, progress, profile, onOpenModule }) {
+function ApprenticeDashboard({ modules, progress, profile, onOpenModule, waivers }) {
   const isAdmin = profile?.role === 'admin' || profile?.role === 'approver';
 
   // Group modules by competency band
@@ -1069,6 +1076,7 @@ function ApprenticeDashboard({ modules, progress, profile, onOpenModule }) {
         progressBy={progressBy}
         onOpen={onOpenModule}
         isAdmin={isAdmin}
+        waivers={waivers}
       />
 
       <ModuleSection
@@ -1079,6 +1087,7 @@ function ApprenticeDashboard({ modules, progress, profile, onOpenModule }) {
         progressBy={progressBy}
         onOpen={onOpenModule}
         isAdmin={isAdmin}
+        waivers={waivers}
       />
 
       <ModuleSection
@@ -1089,6 +1098,7 @@ function ApprenticeDashboard({ modules, progress, profile, onOpenModule }) {
         progressBy={progressBy}
         onOpen={onOpenModule}
         isAdmin={isAdmin}
+        waivers={waivers}
       />
 
       {/* Curriculum-in-development notice */}
@@ -1121,8 +1131,9 @@ function Stat({ label, value, max }) {
   );
 }
 
-function ModuleSection({ eyebrow, title, subtitle, modules, progressBy, onOpen, isAdmin }) {
+function ModuleSection({ eyebrow, title, subtitle, modules, progressBy, onOpen, isAdmin, waivers }) {
   if (!modules.length) return null;
+  const sortedApproved = [...modules].filter(m => m.status === 'approved').sort((a,b) => a.module_number - b.module_number);
   return (
     <section className="mb-20">
       <div className="mb-8 max-w-2xl">
@@ -1131,15 +1142,32 @@ function ModuleSection({ eyebrow, title, subtitle, modules, progressBy, onOpen, 
         <p className="text-base leading-relaxed" style={{ color: 'var(--gic-muted)' }}>{subtitle}</p>
       </div>
       <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-5">
-        {modules.map(m => (
+        {modules.map(m => {
+          let locked = false;
+          let waiverStatus = null;
+          if (!isAdmin && m.status === 'approved' && m.module_number > 1) {
+            const prevApproved = sortedApproved.filter(x => x.module_number < m.module_number).slice(-1)[0];
+            if (prevApproved) {
+              const prevDone = progressBy[prevApproved.id]?.status === 'completed';
+              const waiver = (waivers || []).find(w => w.module_id === m.id);
+              if (!prevDone && waiver?.status !== 'approved') {
+                locked = true;
+                waiverStatus = waiver?.status || null;
+              }
+            }
+          }
+          return (
           <ModuleCard
             key={m.id}
             module={m}
             progress={progressBy[m.id]}
             onOpen={onOpen}
             isAdmin={isAdmin}
+            locked={locked}
+            waiverStatus={waiverStatus}
           />
-        ))}
+          );
+        })}
       </div>
     </section>
   );
@@ -1153,12 +1181,57 @@ function ModuleView({ module: mod, progress, profile, onBack, onProgressUpdate, 
   const [currentLesson, setCurrentLesson] = useState(progress?.current_lesson || 0);
   const [completedLessons, setCompletedLessons] = useState(progress?.lessons_completed || []);
   const [ttsBlock, setTtsBlock] = useState(-1);
+  const [noteText, setNoteText]       = useState('');
+  const [noteSaved, setNoteSaved]     = useState(true);
+  const [showNotes, setShowNotes]     = useState(false);
+  const [lessonReads, setLessonReads] = useState(new Set());
+  const noteTimer = useRef(null);
+
+  // Load which lessons have been opened
+  useEffect(() => {
+    if (!supabase || !profile?.id || isAdmin) return;
+    supabase.from('lesson_reads').select('lesson_index').eq('user_id', profile.id).eq('module_id', mod.id)
+      .then(({ data }) => { if (data) setLessonReads(new Set(data.map(r => r.lesson_index))); });
+  }, [mod.id, profile?.id]);
   const isAdmin = profile?.role === 'admin' || profile?.role === 'approver';
   const isApproved = mod.status === 'approved';
   const content = mod.content || {};
   const lessons = content.lessons || [];
   const quiz = content.quiz || null;
   const hasContent = lessons.length > 0;
+
+  // Load study note when lesson changes
+  useEffect(() => {
+    if (!supabase || !profile?.id || view !== 'lesson') return;
+    setNoteText('');
+    setNoteSaved(true);
+    supabase.from('lesson_notes')
+      .select('note_text')
+      .eq('user_id', profile.id)
+      .eq('module_id', mod.id)
+      .eq('lesson_index', currentLesson)
+      .maybeSingle()
+      .then(({ data }) => { if (data) setNoteText(data.note_text || ''); });
+    // Track lesson read
+    supabase.from('lesson_reads')
+      .upsert({ user_id: profile.id, module_id: mod.id, lesson_index: currentLesson }, { onConflict: 'user_id,module_id,lesson_index', ignoreDuplicates: true });
+  }, [currentLesson, view, profile?.id, mod.id]);
+
+  const saveNote = async (text) => {
+    if (!supabase || !profile?.id) return;
+    await supabase.from('lesson_notes').upsert(
+      { user_id: profile.id, module_id: mod.id, lesson_index: currentLesson, note_text: text, updated_at: new Date().toISOString() },
+      { onConflict: 'user_id,module_id,lesson_index' }
+    );
+    setNoteSaved(true);
+  };
+
+  const handleNoteChange = (text) => {
+    setNoteText(text);
+    setNoteSaved(false);
+    if (noteTimer.current) clearTimeout(noteTimer.current);
+    noteTimer.current = setTimeout(() => saveNote(text), 1200);
+  };
 
   const markLessonComplete = async (idx) => {
     const next = Array.from(new Set([...completedLessons, idx]));
@@ -1273,6 +1346,7 @@ function ModuleView({ module: mod, progress, profile, onBack, onProgressUpdate, 
           <div className="gic-card divide-y" style={{ borderColor: 'var(--gic-line)' }}>
             {lessons.map((lesson, idx) => {
               const done = completedLessons.includes(idx);
+              const read = lessonReads.has(idx);
               return (
                 <button key={idx}
                   onClick={() => { setCurrentLesson(idx); setTtsBlock(-1); window.speechSynthesis.cancel(); setView('lesson'); }}
@@ -1292,6 +1366,8 @@ function ModuleView({ module: mod, progress, profile, onBack, onProgressUpdate, 
                     )}
                     {done ? (
                       <CheckCircle2 size={18} style={{ color: 'var(--gic-green)' }} />
+                    ) : read ? (
+                      <BookOpen size={16} style={{ color: 'var(--gic-blue)', opacity: 0.6 }} title="In progress" />
                     ) : (
                       <Circle size={18} style={{ color: 'var(--gic-line)' }} />
                     )}
@@ -1440,8 +1516,37 @@ function ModuleView({ module: mod, progress, profile, onBack, onProgressUpdate, 
 
         <AskQuestionButton profile={profile} moduleNumber={mod.module_number} lessonIndex={currentLesson} lessonTitle={lesson.title} />
 
+        {/* Study Notes */}
+        {!isAdmin && (
+          <div className="mt-10 border rounded-xl overflow-hidden" style={{ borderColor: 'var(--gic-line)' }}>
+            <button onClick={() => setShowNotes(!showNotes)}
+              className="w-full flex items-center justify-between px-5 py-3 text-sm font-medium"
+              style={{ background: 'var(--gic-bone)' }}>
+              <span className="flex items-center gap-2">
+                <Edit3 size={13} style={{ color: 'var(--gic-blue)' }}/> My notes for this lesson
+                {noteText && <span className="badge" style={{ color: 'var(--gic-green)', background: 'rgba(31,122,74,0.08)' }}>saved</span>}
+              </span>
+              <ChevronRight size={14} style={{ transform: showNotes ? 'rotate(90deg)' : 'none', transition: 'transform 0.2s', color: 'var(--gic-warm)' }}/>
+            </button>
+            {showNotes && (
+              <div className="p-4">
+                <textarea
+                  className="w-full text-sm leading-relaxed resize-none border-0 outline-none bg-transparent"
+                  style={{ minHeight: 120, color: 'var(--gic-ink)' }}
+                  placeholder="Type your notes here — they're saved automatically and private to you…"
+                  value={noteText}
+                  onChange={e => handleNoteChange(e.target.value)}
+                />
+                <div className="text-xs mt-1" style={{ color: 'var(--gic-warm)' }}>
+                  {noteSaved ? 'Saved' : 'Saving…'}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Nav */}
-        <div className="mt-16 pt-8 border-t flex items-center justify-between" style={{ borderColor: 'var(--gic-line)' }}>
+        <div className="mt-10 pt-8 border-t flex items-center justify-between" style={{ borderColor: 'var(--gic-line)' }}>
           <button
             onClick={() => { setCurrentLesson(Math.max(0, currentLesson - 1)); setTtsBlock(-1); window.speechSynthesis.cancel(); }}
             disabled={currentLesson === 0}
@@ -1780,12 +1885,94 @@ function QuizRunner({ mod, quiz, profile, onClose, onComplete }) {
 // ============================================================
 function AdminDashboard({ modules, profile, onOpenModule, onApprove, onModuleUpdated, onModuleDeleted }) {
   const isApprover = profile?.role === 'approver';
+  const isAdmin = profile?.role === 'admin';
+  const [adminTab, setAdminTab] = useState('curriculum'); // curriculum | team | analytics
   const [filter, setFilter] = useState('all'); // all | draft | approved
   const [editingModule, setEditingModule] = useState(null);
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [createTitle, setCreateTitle] = useState('');
   const [createNumber, setCreateNumber] = useState('');
   const [creating, setCreating] = useState(false);
+  // Team tab
+  const [apprentices, setApprentices] = useState([]);
+  const [mentors, setMentors] = useState([]);
+  const [teamLoading, setTeamLoading] = useState(false);
+  const [savingMentor, setSavingMentor] = useState({});
+  // Analytics tab
+  const [analytics, setAnalytics] = useState(null);
+  const [analyticsLoading, setAnalyticsLoading] = useState(false);
+  const [exporting, setExporting] = useState(false);
+
+  useEffect(() => {
+    if (adminTab !== 'team' || !supabase) return;
+    setTeamLoading(true);
+    Promise.all([
+      supabase.from('profiles').select('id,full_name,email,mentor_id,created_at').eq('role', 'apprentice').order('full_name'),
+      supabase.from('profiles').select('id,full_name,email').in('role', ['mentor','admin','approver']).order('full_name')
+    ]).then(([{ data: app }, { data: men }]) => {
+      setApprentices(app || []);
+      setMentors(men || []);
+      setTeamLoading(false);
+    });
+  }, [adminTab]);
+
+  useEffect(() => {
+    if (adminTab !== 'analytics' || !supabase || analytics) return;
+    setAnalyticsLoading(true);
+    (async () => {
+      const [{ data: app }, { data: prog }, { data: subs }] = await Promise.all([
+        supabase.from('profiles').select('id,full_name,email,created_at').eq('role', 'apprentice'),
+        supabase.from('module_progress').select('user_id,status,best_quiz_score,updated_at'),
+        supabase.from('competency_submissions').select('apprentice_id,status,ojl_hours_credited')
+      ]);
+      const approvedCount = modules.filter(m => m.status === 'approved').length;
+      const byUser = {};
+      (app || []).forEach(a => { byUser[a.id] = { ...a, completed: 0, inProgress: 0, scores: [], ojlHours: 0, lastActive: null }; });
+      (prog || []).forEach(p => {
+        if (!byUser[p.user_id]) return;
+        if (p.status === 'completed') byUser[p.user_id].completed++;
+        if (p.status === 'in_progress') byUser[p.user_id].inProgress++;
+        if (p.best_quiz_score) byUser[p.user_id].scores.push(p.best_quiz_score);
+        if (!byUser[p.user_id].lastActive || p.updated_at > byUser[p.user_id].lastActive) byUser[p.user_id].lastActive = p.updated_at;
+      });
+      (subs || []).forEach(s => {
+        if (byUser[s.apprentice_id] && s.status === 'approved') byUser[s.apprentice_id].ojlHours += (s.ojl_hours_credited || 0);
+      });
+      setAnalytics({ rows: Object.values(byUser), approvedModules: approvedCount });
+      setAnalyticsLoading(false);
+    })();
+  }, [adminTab, modules]);
+
+  const assignMentor = async (apprenticeId, mentorId) => {
+    setSavingMentor(prev => ({ ...prev, [apprenticeId]: true }));
+    await supabase.from('profiles').update({ mentor_id: mentorId || null }).eq('id', apprenticeId);
+    setApprentices(prev => prev.map(a => a.id === apprenticeId ? { ...a, mentor_id: mentorId || null } : a));
+    setSavingMentor(prev => ({ ...prev, [apprenticeId]: false }));
+  };
+
+  const exportCSV = async () => {
+    setExporting(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch('/.netlify/functions/export-progress', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(session?.access_token ? { 'Authorization': 'Bearer ' + session.access_token } : {})
+        },
+        body: JSON.stringify({})
+      });
+      if (!res.ok) throw new Error('Export failed: ' + res.status);
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `gic-progress-${new Date().toISOString().slice(0,10)}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e) { alert('Export failed: ' + e.message); }
+    setExporting(false);
+  };
 
   const filtered = modules.filter(m => filter === 'all' ? true : m.status === filter);
   const draftCount = modules.filter(m => m.status !== 'approved').length;
@@ -1821,26 +2008,31 @@ function AdminDashboard({ modules, profile, onOpenModule, onApprove, onModuleUpd
 
   return (
     <main className="max-w-7xl mx-auto px-6 lg:px-10 py-12 animate-fade-in">
-      <div className="mb-12">
-        <div className="eyebrow mb-3">Admin · Curriculum Review</div>
-        <h1 className="font-display text-4xl lg:text-5xl font-medium leading-tight mb-4">
-          {isApprover
-            ? <>Review and approve <em>curriculum.</em></>
-            : <>Curriculum status <em>at a glance.</em></>}
+      <div className="mb-8">
+        <div className="eyebrow mb-3">Admin</div>
+        <h1 className="font-display text-4xl lg:text-5xl font-medium leading-tight mb-3">
+          {isApprover ? <>Review and approve <em>curriculum.</em></> : <>Program <em>management.</em></>}
         </h1>
-        <p className="text-base max-w-2xl" style={{ color: 'var(--gic-muted)' }}>
-          {isApprover
-            ? 'As Curriculum Approver, you are the final sign-off on each module. Apprentices see modules only after you approve them. Your approval replaces the AI-drafted disclosure with your reviewed-and-approved attestation.'
-            : 'Track which modules are ready for apprentices and which are still in development. Only Cathy Jackson-Gent can approve modules for publication.'}
-        </p>
       </div>
 
-      <div className="grid grid-cols-3 gap-px mb-12 border" style={{ borderColor: 'var(--gic-line)', background: 'var(--gic-line)' }}>
+      {/* Admin tab bar */}
+      <div className="flex gap-1 mb-8 border-b" style={{ borderColor: 'var(--gic-line)' }}>
+        {[['curriculum','Curriculum'],['team','Team'],['analytics','Analytics']].map(([id,label]) => (
+          <button key={id} onClick={() => setAdminTab(id)}
+            className="px-5 py-3 text-sm font-medium"
+            style={{ borderBottom: adminTab===id ? '2px solid var(--gic-blue)' : '2px solid transparent',
+                     color: adminTab===id ? 'var(--gic-blue)' : 'var(--gic-muted)', marginBottom: '-1px' }}>
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {adminTab === 'curriculum' && <>
+      <div className="grid grid-cols-3 gap-px mb-8 border" style={{ borderColor: 'var(--gic-line)', background: 'var(--gic-line)' }}>
         <Stat label="Total Modules" value={modules.length} />
         <Stat label="Approved" value={approvedCount} max={modules.length} />
         <Stat label="Awaiting Review" value={draftCount} />
       </div>
-
       <div className="mb-6 flex items-center gap-2 flex-wrap">
         <span className="eyebrow mr-2">Filter</span>
         {[
@@ -1891,11 +2083,104 @@ function AdminDashboard({ modules, profile, onOpenModule, onApprove, onModuleUpd
           <AdminModuleRow key={m.id} module={m} onOpen={onOpenModule} onApprove={onApprove} onEdit={setEditingModule} canApprove={isApprover} onDelete={deleteModule} />
         ))}
         {filtered.length === 0 && (
-          <div className="p-10 text-center text-sm" style={{ color: 'var(--gic-muted)' }}>
-            No modules match this filter.
-          </div>
+          <div className="p-10 text-center text-sm" style={{ color: 'var(--gic-muted)' }}>No modules match this filter.</div>
         )}
       </div>
+      </>}
+
+      {adminTab === 'team' && (
+        teamLoading ? <LoadingScreen /> : (
+          <div>
+            <p className="text-sm mb-6" style={{ color: 'var(--gic-muted)' }}>Assign a mentor to each apprentice. Mentors review OJL submissions and answer questions from their assigned apprentices.</p>
+            {apprentices.length === 0 ? (
+              <div className="gic-card p-10 text-center">
+                <Users size={28} className="mx-auto mb-3" style={{ color: 'var(--gic-warm)' }}/>
+                <div className="font-display text-xl font-semibold mb-2">No apprentices yet</div>
+                <p className="text-sm" style={{ color: 'var(--gic-muted)' }}>Apprentices appear here once they register.</p>
+              </div>
+            ) : (
+              <div className="gic-card divide-y" style={{ borderColor: 'var(--gic-line)' }}>
+                {apprentices.map(a => (
+                  <div key={a.id} className="p-5 flex items-center gap-4">
+                    <div className="w-10 h-10 rounded-full flex items-center justify-center font-semibold text-sm flex-shrink-0"
+                      style={{ background: 'rgba(45,31,177,0.08)', color: 'var(--gic-blue)' }}>
+                      {(a.full_name || a.email || '?').slice(0,1).toUpperCase()}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium truncate">{a.full_name || a.email}</div>
+                      <div className="text-xs truncate" style={{ color: 'var(--gic-muted)' }}>{a.email}</div>
+                    </div>
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      <select
+                        value={a.mentor_id || ''}
+                        onChange={e => assignMentor(a.id, e.target.value)}
+                        className="border rounded-lg px-3 py-2 text-sm"
+                        style={{ borderColor: 'var(--gic-line)', minWidth: 180 }}>
+                        <option value="">— No mentor assigned —</option>
+                        {mentors.map(m => (
+                          <option key={m.id} value={m.id}>{m.full_name || m.email}</option>
+                        ))}
+                      </select>
+                      {savingMentor[a.id] && <Loader2 size={14} className="animate-spin" style={{ color: 'var(--gic-blue)' }}/>}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )
+      )}
+
+      {adminTab === 'analytics' && (
+        analyticsLoading || !analytics ? <LoadingScreen /> : (
+          <div>
+            <div className="flex items-center justify-between mb-6">
+              <p className="text-sm" style={{ color: 'var(--gic-muted)' }}>Cohort overview — {analytics.rows.length} apprentice{analytics.rows.length !== 1 ? 's' : ''} enrolled.</p>
+              <button onClick={exportCSV} disabled={exporting} className="btn-secondary flex items-center gap-2 text-sm">
+                <Download size={13}/>{exporting ? 'Exporting…' : 'Export RAPIDS CSV'}
+              </button>
+            </div>
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-px mb-8 border" style={{ borderColor: 'var(--gic-line)', background: 'var(--gic-line)' }}>
+              <Stat label="Enrolled" value={analytics.rows.length} />
+              <Stat label="Avg Completion" value={
+                analytics.rows.length
+                  ? Math.round(analytics.rows.reduce((s, r) => s + (r.completed / (analytics.approvedModules || 1)), 0) / analytics.rows.length * 100) + '%'
+                  : '—'
+              } />
+              <Stat label="Fully Complete" value={analytics.rows.filter(r => r.completed >= analytics.approvedModules && analytics.approvedModules > 0).length} />
+              <Stat label="Not Started" value={analytics.rows.filter(r => r.completed === 0 && r.inProgress === 0).length} />
+            </div>
+            <div className="gic-card divide-y" style={{ borderColor: 'var(--gic-line)' }}>
+              <div className="grid grid-cols-12 px-5 py-2.5 text-xs font-semibold" style={{ color: 'var(--gic-muted)' }}>
+                <div className="col-span-4">Apprentice</div>
+                <div className="col-span-2 text-center">Progress</div>
+                <div className="col-span-2 text-center">Quiz Avg</div>
+                <div className="col-span-2 text-center">OJL Hours</div>
+                <div className="col-span-2 text-right">Last Active</div>
+              </div>
+              {analytics.rows.sort((a,b) => b.completed - a.completed).map(r => {
+                const pct = analytics.approvedModules > 0 ? Math.round((r.completed / analytics.approvedModules) * 100) : 0;
+                const avgScore = r.scores.length ? Math.round(r.scores.reduce((s,x)=>s+x,0)/r.scores.length) : null;
+                return (
+                  <div key={r.id} className="grid grid-cols-12 px-5 py-4 items-center">
+                    <div className="col-span-4">
+                      <div className="font-medium text-sm">{r.full_name || r.email}</div>
+                      <div className="text-xs" style={{ color: 'var(--gic-muted)' }}>{r.email}</div>
+                    </div>
+                    <div className="col-span-2 text-center">
+                      <div className="text-sm font-semibold">{pct}%</div>
+                      <div className="text-xs" style={{ color: 'var(--gic-muted)' }}>{r.completed}/{analytics.approvedModules} modules</div>
+                    </div>
+                    <div className="col-span-2 text-center text-sm">{avgScore !== null ? avgScore + '%' : '—'}</div>
+                    <div className="col-span-2 text-center text-sm">{r.ojlHours > 0 ? r.ojlHours + 'h' : '—'}</div>
+                    <div className="col-span-2 text-right text-xs" style={{ color: 'var(--gic-warm)' }}>{r.lastActive ? fmtRelative(r.lastActive) : 'Never'}</div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )
+      )}
 
       {editingModule && (
         <ModuleEditor
@@ -1965,6 +2250,106 @@ function AdminModuleRow({ module: mod, onOpen, onApprove, onEdit, canApprove, on
             <Trash2 size={13}/>
           </button>
         )}
+      </div>
+    </div>
+  );
+}
+
+// ============================================================
+// PREREQUISITE WAIVER MODAL — apprentice requests jump-ahead approval
+// ============================================================
+function WaiverRequestModal({ module: mod, profile, existingWaiver, onClose, onSubmitted }) {
+  const [reason, setReason] = useState('');
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState('');
+
+  if (existingWaiver) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(15,22,49,0.6)', backdropFilter: 'blur(6px)' }}>
+        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-8 text-center">
+          <div className="w-14 h-14 rounded-full flex items-center justify-center mx-auto mb-4"
+            style={{ background: existingWaiver.status === 'approved' ? 'rgba(31,122,74,0.08)' : existingWaiver.status === 'denied' ? 'rgba(184,61,92,0.08)' : 'rgba(200,132,28,0.08)' }}>
+            {existingWaiver.status === 'approved' ? <CheckCircle2 size={24} style={{ color: 'var(--gic-green)' }}/> :
+             existingWaiver.status === 'denied'   ? <AlertCircle size={24} style={{ color: 'var(--gic-rose)' }}/> :
+             <Clock size={24} style={{ color: 'var(--gic-amber)' }}/>}
+          </div>
+          <div className="font-display text-xl font-semibold mb-2">
+            {existingWaiver.status === 'approved' ? 'Jump-ahead approved' :
+             existingWaiver.status === 'denied'   ? 'Request not approved' : 'Request pending'}
+          </div>
+          <div className="text-sm mb-2" style={{ color: 'var(--gic-muted)' }}>
+            {existingWaiver.status === 'approved' ? `Your mentor approved early access to "${mod.title}". You can open it now.` :
+             existingWaiver.status === 'denied'   ? `Your mentor did not approve the jump-ahead request for "${mod.title}". Complete the previous module to proceed.` :
+             `Your request is pending mentor review. You'll be notified when a decision is made.`}
+          </div>
+          {existingWaiver.reviewer_note && (
+            <div className="mt-3 p-3 rounded-lg text-sm text-left" style={{ background: 'var(--gic-bone)', color: 'var(--gic-ink)' }}>
+              <strong>Mentor note:</strong> {existingWaiver.reviewer_note}
+            </div>
+          )}
+          <button onClick={onClose} className="btn-primary mt-6">Close</button>
+        </div>
+      </div>
+    );
+  }
+
+  const submit = async () => {
+    if (!reason.trim()) return;
+    setSending(true);
+    setError('');
+    const { data, error: e } = await supabase.from('prerequisite_waivers').upsert({
+      apprentice_id: profile.id,
+      module_id: mod.id,
+      reason: reason.trim(),
+      status: 'pending'
+    }, { onConflict: 'apprentice_id,module_id' }).select().single();
+    if (e) { setError(e.message); setSending(false); return; }
+    // Notify mentor via email (best effort)
+    await callFn('send-notification', {
+      type: 'waiver_requested',
+      to: 'admin@globalinvestmentcompanies.com',
+      data: { apprentice: profile.full_name || profile.email, module: mod.title, reason: reason.trim() }
+    }).catch(() => {});
+    setSending(false);
+    onSubmitted && onSubmitted(data);
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(15,22,49,0.6)', backdropFilter: 'blur(6px)' }}>
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg">
+        <div className="p-6 border-b flex items-center justify-between" style={{ borderColor: 'var(--gic-line)' }}>
+          <div>
+            <div className="eyebrow mb-1">Prerequisite Required</div>
+            <div className="font-display text-xl font-semibold">{mod.title}</div>
+          </div>
+          <button onClick={onClose} className="btn-ghost"><X size={18}/></button>
+        </div>
+        <div className="p-6 space-y-4">
+          <div className="p-4 rounded-lg flex items-start gap-3" style={{ background: 'rgba(200,132,28,0.06)', borderLeft: '3px solid var(--gic-amber)' }}>
+            <Lock size={15} className="flex-shrink-0 mt-0.5" style={{ color: 'var(--gic-amber)' }}/>
+            <div className="text-sm" style={{ color: 'var(--gic-ink)' }}>
+              This module requires completing the previous module first. Request a jump-ahead and your mentor will review it.
+            </div>
+          </div>
+          <div>
+            <label className="eyebrow block mb-2">Why are you ready to jump ahead?</label>
+            <textarea
+              className="gic-input min-h-[110px] resize-y"
+              placeholder="Explain your relevant experience, prior training, or why you feel prepared to skip the prerequisite…"
+              value={reason}
+              onChange={e => setReason(e.target.value)}
+              maxLength={1000}
+            />
+            <div className="text-xs mt-1 text-right" style={{ color: 'var(--gic-warm)' }}>{reason.length}/1000</div>
+          </div>
+          {error && <div className="text-sm p-3 rounded-lg" style={{ background: 'rgba(184,61,92,0.06)', color: 'var(--gic-rose)' }}>{error}</div>}
+          <div className="flex gap-3">
+            <button onClick={onClose} className="btn-secondary flex-1">Cancel</button>
+            <button onClick={submit} disabled={!reason.trim() || sending} className="btn-primary flex-1 flex items-center justify-center gap-2">
+              <Send size={13}/>{sending ? 'Submitting…' : 'Send request to mentor'}
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -2256,9 +2641,29 @@ function RecorderModal({ module: mod, profile, onClose, onSubmitted }) {
                 </div>
               )}
               {!stream && camPerm !== 'denied' ? (
-                <button onClick={startCamera} className="btn-primary w-full flex items-center justify-center gap-2">
-                  <Video size={16}/> Enable camera & microphone
-                </button>
+                <div className="space-y-3">
+                  <button onClick={startCamera} className="btn-primary w-full flex items-center justify-center gap-2">
+                    <Video size={16}/> Enable camera & microphone
+                  </button>
+                  <div className="flex items-center gap-3">
+                    <div className="flex-1 border-t" style={{ borderColor: 'var(--gic-line)' }}/>
+                    <span className="text-xs" style={{ color: 'var(--gic-warm)' }}>or</span>
+                    <div className="flex-1 border-t" style={{ borderColor: 'var(--gic-line)' }}/>
+                  </div>
+                  <label className="btn-secondary w-full flex items-center justify-center gap-2 cursor-pointer">
+                    <Upload size={15}/> Upload a video file
+                    <input type="file" accept="video/*" className="sr-only" onChange={e => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      if (file.size > 500 * 1024 * 1024) { setError('File too large. Maximum 500 MB.'); return; }
+                      setBlob(file);
+                      setPreviewUrl(URL.createObjectURL(file));
+                      setDuration(0);
+                      setStage('preview');
+                    }}/>
+                  </label>
+                  <p className="text-xs text-center" style={{ color: 'var(--gic-warm)' }}>Mobile users: record in your camera app then upload here</p>
+                </div>
               ) : stream ? (
                 <>
                   <div className="aspect-video rounded-lg overflow-hidden bg-stone-900">
@@ -2406,6 +2811,15 @@ function SubmissionViewer({ submission, mod, profile, onClose, onUpdated }) {
         .single();
       if (e) throw e;
       onUpdated && onUpdated(data);
+      // Email the apprentice
+      const { data: app } = await supabase.from('profiles').select('email').eq('id', submission.apprentice_id).maybeSingle();
+      if (app?.email) {
+        callFn('send-notification', {
+          type: 'submission_reviewed',
+          to: app.email,
+          data: { module: mod?.title || 'Module', status, hours: Number(hours) || 0, feedback: feedback.trim() }
+        }).catch(() => {});
+      }
       onClose();
     } catch (e) {
       setError(e.message || 'Update failed');
@@ -2661,7 +3075,7 @@ function CoachDrawer({ open, onClose, profile, lessonContext, moduleTitle }) {
 // MENTOR DASHBOARD — lists submissions to review + questions tab
 // ============================================================
 function MentorDashboard({ profile, modules, onViewSubmission }) {
-  const [activeTab, setActiveTab] = useState('submissions'); // submissions | questions | certificates
+  const [activeTab, setActiveTab] = useState('submissions'); // submissions | questions | waivers | certificates
   const [allCerts, setAllCerts] = useState([]);
   const [certsLoading, setCertsLoading] = useState(false);
   const [viewingCert, setViewingCert] = useState(null);
@@ -2675,6 +3089,12 @@ function MentorDashboard({ profile, modules, onViewSubmission }) {
   const [answerTexts, setAnswerTexts] = useState({}); // question_id -> text
   const [answerSending, setAnswerSending] = useState({}); // question_id -> bool
   const [qProfilesById, setQProfilesById] = useState({});
+  // Waivers tab state
+  const [waivers, setWaivers] = useState([]);
+  const [waiversLoading, setWaiversLoading] = useState(false);
+  const [waiverProfilesById, setWaiverProfilesById] = useState({});
+  const [waiverNotes, setWaiverNotes] = useState({});
+  const [waiverDeciding, setWaiverDeciding] = useState({});
 
   useEffect(() => {
     if (!profile) return;
@@ -2762,6 +3182,15 @@ function MentorDashboard({ profile, modules, onViewSubmission }) {
       await supabase.from('questions').update({ status: 'resolved', updated_at: new Date().toISOString() }).eq('id', q.id);
       setQuestions(prev => prev.map(x => x.id === q.id ? { ...x, status: 'resolved' } : x));
       setAnswerTexts(prev => ({ ...prev, [q.id]: '' }));
+      // Email the apprentice
+      const asker = qProfilesById[q.asker_id];
+      if (asker?.email) {
+        callFn('send-notification', {
+          type: 'question_answered',
+          to: asker.email,
+          data: { question: q.question_text, answer: text, responder: profile.full_name || profile.email }
+        }).catch(() => {});
+      }
     }
     setAnswerSending(prev => ({ ...prev, [q.id]: false }));
   };
@@ -2770,6 +3199,51 @@ function MentorDashboard({ profile, modules, onViewSubmission }) {
     if (!supabase) return;
     await supabase.from('questions').update({ status: 'resolved', updated_at: new Date().toISOString() }).eq('id', q.id);
     setQuestions(prev => prev.map(x => x.id === q.id ? { ...x, status: 'resolved' } : x));
+  };
+
+  // Load waivers when tab active
+  useEffect(() => {
+    if (activeTab !== 'waivers' || !supabase) return;
+    let mounted = true;
+    setWaiversLoading(true);
+    (async () => {
+      const { data: ws } = await supabase.from('prerequisite_waivers').select('*').order('created_at', { ascending: false });
+      if (!mounted) return;
+      setWaivers(ws || []);
+      const ids = Array.from(new Set((ws||[]).map(w => w.apprentice_id)));
+      if (ids.length) {
+        const { data: pp } = await supabase.from('profiles').select('id,full_name,email').in('id', ids);
+        const map = {}; (pp||[]).forEach(p => { map[p.id] = p; });
+        if (mounted) setWaiverProfilesById(map);
+      }
+      if (mounted) setWaiversLoading(false);
+    })();
+    return () => { mounted = false; };
+  }, [activeTab]);
+
+  const decideWaiver = async (w, status) => {
+    setWaiverDeciding(prev => ({ ...prev, [w.id]: true }));
+    const note = waiverNotes[w.id] || '';
+    const { data, error } = await supabase.from('prerequisite_waivers').update({
+      status,
+      reviewer_note: note || null,
+      reviewed_by: profile.id,
+      reviewed_at: new Date().toISOString()
+    }).eq('id', w.id).select().single();
+    if (!error && data) {
+      setWaivers(prev => prev.map(x => x.id === w.id ? data : x));
+      // Email apprentice
+      const apprentice = waiverProfilesById[w.apprentice_id];
+      const mod = modules.find(m => m.id === w.module_id);
+      if (apprentice?.email) {
+        callFn('send-notification', {
+          type: 'waiver_decided',
+          to: apprentice.email,
+          data: { module: mod?.title || 'Module', status, note }
+        }).catch(() => {});
+      }
+    }
+    setWaiverDeciding(prev => ({ ...prev, [w.id]: false }));
   };
 
   const grantExamAccess = async (q) => {
@@ -2805,7 +3279,7 @@ function MentorDashboard({ profile, modules, onViewSubmission }) {
 
       {/* Tab bar */}
       <div className="flex gap-1 mb-8 border-b" style={{ borderColor: 'var(--gic-line)' }}>
-        {[['submissions','Submissions'],['questions','Questions'],['certificates','Certificates']].map(([id,label]) => (
+        {[['submissions','Submissions'],['questions','Questions'],['waivers','Waivers'],['certificates','Certificates']].map(([id,label]) => (
           <button key={id} onClick={() => setActiveTab(id)}
             className="px-5 py-3 text-sm font-medium"
             style={{ borderBottom: activeTab===id ? '2px solid var(--gic-blue)' : '2px solid transparent',
@@ -2816,6 +3290,9 @@ function MentorDashboard({ profile, modules, onViewSubmission }) {
             )}
             {id==='questions' && questions.filter(q=>q.status==='open').length > 0 && (
               <span className="ml-2 text-xs font-bold" style={{ color: 'var(--gic-amber)' }}>{questions.filter(q=>q.status==='open').length}</span>
+            )}
+            {id==='waivers' && waivers.filter(w=>w.status==='pending').length > 0 && (
+              <span className="ml-2 text-xs font-bold" style={{ color: 'var(--gic-amber)' }}>{waivers.filter(w=>w.status==='pending').length}</span>
             )}
           </button>
         ))}
@@ -3002,6 +3479,75 @@ function MentorDashboard({ profile, modules, onViewSubmission }) {
           </div>
         )}
       </>}
+
+      {activeTab === 'waivers' && (
+        waiversLoading ? <LoadingScreen /> : waivers.length === 0 ? (
+          <div className="gic-card p-12 text-center">
+            <Lock size={28} className="mx-auto mb-4" style={{ color: 'var(--gic-warm)' }}/>
+            <div className="font-display text-xl font-semibold mb-2">No waiver requests</div>
+            <p className="text-sm" style={{ color: 'var(--gic-muted)' }}>When apprentices request to skip a prerequisite, their requests appear here.</p>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {waivers.map(w => {
+              const apprentice = waiverProfilesById[w.apprentice_id];
+              const mod = modules.find(m => m.id === w.module_id);
+              return (
+                <div key={w.id} className="gic-card p-6">
+                  <div className="flex items-start justify-between gap-4 mb-3">
+                    <div>
+                      <div className="flex items-center gap-2 mb-1">
+                        {apprentice && <span className="text-sm font-semibold">{apprentice.full_name || apprentice.email}</span>}
+                        <span className="eyebrow">{mod ? `Module ${String(mod.module_number).padStart(2,'0')} · ${mod.title}` : 'Unknown module'}</span>
+                      </div>
+                      <div className="text-xs" style={{ color: 'var(--gic-warm)' }}>{fmtRelative(w.created_at)}</div>
+                    </div>
+                    <span className="badge flex-shrink-0"
+                      style={w.status === 'approved' ? { color: 'var(--gic-green)', background: 'rgba(31,122,74,0.08)' }
+                           : w.status === 'denied'   ? { color: 'var(--gic-rose)',  background: 'rgba(184,61,92,0.08)' }
+                           : { color: 'var(--gic-amber)', background: 'rgba(200,132,28,0.08)' }}>
+                      {w.status === 'approved' ? 'Approved' : w.status === 'denied' ? 'Denied' : 'Pending'}
+                    </span>
+                  </div>
+                  {w.reason && (
+                    <div className="mb-3 p-3 rounded-lg text-sm" style={{ background: 'var(--gic-bone)', color: 'var(--gic-ink)' }}>
+                      <div className="eyebrow mb-1">Their reason</div>
+                      {w.reason}
+                    </div>
+                  )}
+                  {w.status === 'pending' && (
+                    <div className="mt-3 pt-3 border-t" style={{ borderColor: 'var(--gic-line)' }}>
+                      <textarea
+                        value={waiverNotes[w.id] || ''}
+                        onChange={e => setWaiverNotes(prev => ({ ...prev, [w.id]: e.target.value }))}
+                        placeholder="Optional note to apprentice…"
+                        rows={2}
+                        className="w-full border rounded-lg p-3 text-sm mb-3 resize-none"
+                        style={{ borderColor: 'var(--gic-line)' }}
+                      />
+                      <div className="flex gap-2">
+                        <button onClick={() => decideWaiver(w, 'denied')} disabled={waiverDeciding[w.id]}
+                          className="btn-secondary flex items-center gap-1.5 text-sm"
+                          style={{ borderColor: 'var(--gic-rose)', color: 'var(--gic-rose)' }}>
+                          <X size={13}/> Deny
+                        </button>
+                        <button onClick={() => decideWaiver(w, 'approved')} disabled={waiverDeciding[w.id]}
+                          className="btn-primary flex items-center gap-1.5 text-sm"
+                          style={{ background: 'var(--gic-green)' }}>
+                          <Check size={13}/> Approve jump-ahead
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                  {w.reviewer_note && w.status !== 'pending' && (
+                    <div className="mt-2 text-xs" style={{ color: 'var(--gic-muted)' }}>Note sent: {w.reviewer_note}</div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )
+      )}
     </main>
   );
 }
@@ -3480,7 +4026,15 @@ function AskQuestionButton({ profile, moduleNumber, lessonIndex, lessonTitle }) 
       question_text: text.trim()
     });
     setSending(false);
-    if (!error) { setSent(true); setText(''); setTimeout(() => { setSent(false); setOpen(false); }, 2000); }
+    if (!error) {
+      setSent(true); setText(''); setTimeout(() => { setSent(false); setOpen(false); }, 2000);
+      // Email mentor/admin
+      callFn('send-notification', {
+        type: 'new_question',
+        to: 'admin@globalinvestmentcompanies.com',
+        data: { apprentice: profile.full_name || profile.email, module: moduleNumber, lessonTitle, question: text.trim() }
+      }).catch(() => {});
+    }
   };
 
   return (
@@ -4647,6 +5201,8 @@ function App({ profile, signOut }) {
   const [showExamAccessRequest, setShowExamAccessRequest] = useState(false);
   const [mentorBadge, setMentorBadge]               = useState(0);
   const [progressBadge, setProgressBadge]           = useState(0);
+  const [waivers, setWaivers]                       = useState([]); // prerequisite waivers for current user
+  const [waiverRequestMod, setWaiverRequestMod]     = useState(null); // module user is trying to jump-ahead to
   const { logo: brandLogo, refresh: refreshBranding, setLogo: setBrandLogo } = useBranding(profileData);
 
   // Load modules
@@ -4730,6 +5286,13 @@ function App({ profile, signOut }) {
 
     return () => { mounted = false; supabase.removeChannel(channel); };
   }, [profile?.id]);
+
+  // Load prerequisite waivers for apprentice
+  useEffect(() => {
+    if (!supabase || !profile?.id || profile.role !== 'apprentice') return;
+    supabase.from('prerequisite_waivers').select('*').eq('apprentice_id', profile.id)
+      .then(({ data }) => { if (data) setWaivers(data); });
+  }, [profile?.id, profile?.role]);
 
   // Notification badge counts — lightweight, no joins
   useEffect(() => {
@@ -4819,6 +5382,19 @@ function App({ profile, signOut }) {
 
   const handleOpen = (mod) => {
     if (mod?.__examAccessRequest) { setShowExamAccessRequest(true); return; }
+    // Prerequisite check — apprentices only
+    if (profile?.role === 'apprentice' && mod.module_number > 1) {
+      const approvedMods = modules.filter(m => m.status === 'approved').sort((a,b) => a.module_number - b.module_number);
+      const prevMod = approvedMods.filter(m => m.module_number < mod.module_number).slice(-1)[0];
+      if (prevMod) {
+        const prevDone = progress.find(p => p.module_id === prevMod.id && p.status === 'completed');
+        const waiver = waivers.find(w => w.module_id === mod.id && w.status === 'approved');
+        if (!prevDone && !waiver) {
+          setWaiverRequestMod(mod);
+          return;
+        }
+      }
+    }
     setOpenModule(mod);
     setView('module');
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -4916,6 +5492,7 @@ function App({ profile, signOut }) {
             progress={progress}
             profile={profile}
             onOpenModule={handleOpen}
+            waivers={waivers}
           />
         )}
         {view === 'apprentice' && (
@@ -4985,6 +5562,21 @@ function App({ profile, signOut }) {
           profile={profileData}
           onClose={() => setShowExamAccessRequest(false)}
           onSubmitted={() => setShowExamAccessRequest(false)}
+        />
+      )}
+      {waiverRequestMod && (
+        <WaiverRequestModal
+          module={waiverRequestMod}
+          profile={profileData}
+          existingWaiver={waivers.find(w => w.module_id === waiverRequestMod.id) || null}
+          onClose={() => setWaiverRequestMod(null)}
+          onSubmitted={(w) => {
+            setWaivers(prev => {
+              const exists = prev.find(x => x.id === w.id);
+              return exists ? prev.map(x => x.id === w.id ? w : x) : [...prev, w];
+            });
+            setWaiverRequestMod(null);
+          }}
         />
       )}
     </div>
