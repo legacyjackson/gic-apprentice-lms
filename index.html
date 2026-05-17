@@ -1911,7 +1911,13 @@ function AdminDashboard({ modules, profile, onOpenModule, onApprove, onModuleUpd
       supabase.from('profiles').select('id,full_name,email').in('role', ['mentor','admin','approver']).order('full_name')
     ]).then(([{ data: app }, { data: men }]) => {
       setApprentices(app || []);
-      setMentors(men || []);
+      // Deduplicate mentors by email — keep the one with a full_name set
+      const seen = new Map();
+      (men || []).forEach(m => {
+        const existing = seen.get(m.email);
+        if (!existing || (!existing.full_name && m.full_name)) seen.set(m.email, m);
+      });
+      setMentors(Array.from(seen.values()));
       setTeamLoading(false);
     });
   }, [adminTab]);
