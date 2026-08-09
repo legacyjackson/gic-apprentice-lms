@@ -5247,6 +5247,27 @@ function SponsorsAdmin({ profile }) {
   };
 
   const deleteSponsor = async (sponsor) => {
+    // Deleting a sponsor cascade-deletes its sponsorship_tokens — including any
+    // code already issued to an approved applicant who hasn't activated yet.
+    // That would silently brick their code with no way for them to know why,
+    // so block the delete outright if any such applicant exists.
+    const [{ count: pendingCount }, { count: activeCount }] = await Promise.all([
+      supabase.from('registrants').select('id', { count: 'exact', head: true })
+        .eq('sponsor_id', sponsor.id).eq('status', 'approved').is('activated_profile_id', null),
+      supabase.from('profiles').select('id', { count: 'exact', head: true })
+        .eq('employer_sponsor_id', sponsor.id)
+    ]);
+
+    if (pendingCount > 0) {
+      alert(`Can't delete "${sponsor.name}" — ${pendingCount} approved applicant${pendingCount === 1 ? ' has' : 's have'} an unredeemed sponsorship code tied to this sponsor. Deleting it would destroy ${pendingCount === 1 ? 'that code' : 'those codes'} and lock ${pendingCount === 1 ? 'them' : 'them'} out of activating.\n\nReassign ${pendingCount === 1 ? 'that applicant' : 'those applicants'} to a different sponsor in the Registrants tab first, then delete.`);
+      return;
+    }
+
+    const activeWarning = activeCount > 0
+      ? ` ${activeCount} already-active apprentice${activeCount === 1 ? '' : 's'} will lose the sponsor label on their profile (their account and access are unaffected).`
+      : '';
+    if (!confirm(`Delete sponsor "${sponsor.name}"? This also removes its enrollment codes.${activeWarning} This cannot be undone.`)) return;
+
     const { error } = await supabase.from('employer_sponsors').delete().eq('id', sponsor.id);
     if (error) { alert('Delete failed: ' + error.message); return; }
     setSponsors(prev => prev.filter(s => s.id !== sponsor.id));
@@ -5294,7 +5315,7 @@ function SponsorsAdmin({ profile }) {
                       <button onClick={() => setShowTokenForm(s)} className="btn-secondary flex items-center gap-2 text-sm">
                         <KeySquare size={12}/> Generate code
                       </button>
-                      <button onClick={() => { if (confirm(`Delete sponsor "${s.name}"? This also removes its enrollment codes. Apprentices already linked to it keep their record but lose the sponsor reference. This cannot be undone.`)) deleteSponsor(s); }}
+                      <button onClick={() => deleteSponsor(s)}
                         className="btn-ghost" title="Delete sponsor" style={{ color: 'var(--gic-rose)' }}>
                         <Trash2 size={14}/>
                       </button>
