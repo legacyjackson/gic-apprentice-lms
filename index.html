@@ -296,6 +296,11 @@ async function callFn(name, body) {
   return json;
 }
 
+function recordLoginEvent(userId) {
+  if (!supabase || !userId) return;
+  supabase.from('login_events').insert({ user_id: userId }).then(() => {}, () => {});
+}
+
 async function callPublicFn(name, body) {
   const r = await fetch(`/.netlify/functions/${name}`, {
     method: 'POST',
@@ -401,7 +406,7 @@ function SetupNeeded() {
 // ============================================================
 // LOADING FULL SCREEN
 // ============================================================
-const APP_VERSION = 'v2026.05.17-r1';
+const APP_VERSION = 'v2026.08.09-r1';
 
 function LoadingScreen() {
   return (
@@ -418,7 +423,7 @@ function LoadingScreen() {
 // ============================================================
 // LOGIN SCREEN
 // ============================================================
-function LoginScreen() {
+function LoginScreen({ onApply }) {
   const [email, setEmail]       = useState('');
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
@@ -465,17 +470,19 @@ function LoginScreen() {
           fullName: fullName.trim()
         });
         // Auto sign-in
-        const { error } = await supabase.auth.signInWithPassword({
+        const { data, error } = await supabase.auth.signInWithPassword({
           email: email.trim().toLowerCase(),
           password
         });
         if (error) throw error;
+        recordLoginEvent(data?.user?.id);
       } else {
-        const { error } = await supabase.auth.signInWithPassword({
+        const { data, error } = await supabase.auth.signInWithPassword({
           email:    email.trim().toLowerCase(),
           password
         });
         if (error) throw error;
+        recordLoginEvent(data?.user?.id);
       }
     } catch (err) {
       setError(err.message || 'Something went wrong.');
@@ -654,8 +661,476 @@ function LoginScreen() {
             </div>
           </form>
 
+          {mode !== 'enroll' && onApply && (
+            <div className="mt-6 pt-6 border-t text-center" style={{ borderColor: 'var(--gic-line)' }}>
+              <button type="button" onClick={onApply} className="btn-primary inline-flex items-center gap-2">
+                <UserIcon size={14}/> New apprentice? Start your application
+              </button>
+            </div>
+          )}
+
           <div className="mt-12 pt-6 border-t text-xs leading-relaxed" style={{ borderColor: 'var(--gic-line)', color: 'var(--gic-warm)' }}>
             This platform is restricted to enrolled apprentices and Global Investment Company staff. Unauthorized access is prohibited. For account assistance contact <span style={{ color: 'var(--gic-blue)' }}>{CFG.APPROVER_EMAIL}</span>.
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================
+// COMPLIANCE FOOTER — required disclosure short-forms
+// (per GIC Required Disclosures doc, "Recruitment/marketing" row)
+// ============================================================
+function ComplianceFooter() {
+  return (
+    <div className="mt-10 pt-6 border-t text-xs leading-relaxed space-y-2" style={{ borderColor: 'var(--gic-line)', color: 'var(--gic-warm)' }}>
+      <p>This is a Registered Apprenticeship Program sponsored by Global Investment Company, Inc. and approved by the U.S. Department of Labor, Office of Apprenticeship. Occupation Title: Wealth Solutions Counselor (O*NET-SOC 14-3031.00 · RAPIDS Program ID 3007HY).</p>
+      <p>GIC is an Equal Opportunity Employer/Sponsor. All qualified applicants receive consideration for apprenticeship without regard to race, color, religion, sex, sexual orientation, gender identity, national origin, disability, age, genetic information, veteran status, or any other basis protected by applicable law.</p>
+      <p>This is a financial coaching role — it does not require or involve securities or insurance licensing. Wealth Solutions Counselors provide general financial education and coaching, not personalized investment advice or licensed advisory services.</p>
+      <p>Wages shown are illustrative and subject to change; actual compensation depends on role, location, experience, and applicable program terms.</p>
+    </div>
+  );
+}
+
+// ============================================================
+// APPLICATION FORM — public, unauthenticated multi-step wizard
+// ============================================================
+const APPLICATION_EMPTY = {
+  full_name: '', dob: '', address: '', city: '', state: '', zip: '', county: '', phone: '', email: '',
+  emergency_contact_name: '', emergency_contact_phone: '',
+  age_16_plus: null, work_eligible_us: null, can_attend_training: null, reliable_transportation: null, willing_ojt: null,
+  education_level: '', school_name: '', graduation_year: '', education_other: '',
+  experience_years: '', experience_explain: '', experience_level: '',
+  exp_budgeting: '', exp_credit: '', exp_debt: '', exp_banking: '', exp_customer_service: '',
+  current_employer: '', current_position: '', current_employment_dates: '',
+  previous_employer: '', previous_position: '', previous_employment_dates: '',
+  goal_why: '', goal_skills: '', goal_longterm: '',
+  skills: {},
+  helped_financial_decisions: null, helped_financial_decisions_explain: '',
+  comfortable_diverse_communities: null, comfortable_sensitive_topics: null,
+  workshops_completed: '',
+  eligibility_docs: {},
+  support_childcare: false, support_transportation: false, support_tutoring: false, support_mental_health: false, support_tech_access: false, support_other: '',
+  agreed_to_commitment: false, signature_name: '',
+  sex: '', ethnicity: '', race: [], disability: '', veteran_status: '', education_level_dol: '', employment_status: '', pre_apprenticeship_program: null,
+};
+
+const SKILLS_LIST = [
+  ['budget', 'Creating a budget'],
+  ['credit_report', 'Reading a credit report'],
+  ['interest_rates', 'Understanding interest rates'],
+  ['debt_mgmt', 'Helping someone manage debt'],
+  ['banking_tools', 'Using banking tools/apps'],
+  ['customer_service', 'Customer service'],
+  ['financial_planning', 'Financial planning'],
+  ['research', 'Research'],
+];
+
+const ELIGIBILITY_DOCS_LIST = [
+  ['gov_id', 'Government-issued ID'],
+  ['ssn_or_workauth', 'Social Security card or Work Authorization'],
+  ['proof_address', 'Proof of address'],
+  ['hs_diploma_ged', 'High School Diploma / GED'],
+  ['resume', 'Resume'],
+  ['commitment_agreement', 'Signed Student Commitment Agreement'],
+  ['ethics_doc', 'Ethics documentation'],
+  ['i9', 'I-9'],
+  ['ss_card', 'Social Security card'],
+];
+
+const RACE_OPTIONS = [
+  'American Indian or Alaska Native', 'Asian', 'Black or African American',
+  'Native Hawaiian or Other Pacific Islander', 'White'
+];
+
+function AppField({ def, value, onChange }) {
+  const base = "gic-input";
+  const label = (
+    <label className="eyebrow block mb-2">{def.label}{def.required ? ' *' : ''}</label>
+  );
+  if (def.type === 'textarea') {
+    return (
+      <div className={def.colSpan === 2 ? 'md:col-span-2' : ''}>
+        {label}
+        <textarea className={base + " min-h-[80px]"} value={value || ''} placeholder={def.placeholder || ''}
+          onChange={e => onChange(e.target.value)} required={def.required} />
+      </div>
+    );
+  }
+  if (def.type === 'select') {
+    return (
+      <div>
+        {label}
+        <select className={base} value={value || ''} onChange={e => onChange(e.target.value)} required={def.required}>
+          <option value="">— Select —</option>
+          {def.options.map(o => <option key={o} value={o}>{o}</option>)}
+        </select>
+      </div>
+    );
+  }
+  if (def.type === 'yesno') {
+    return (
+      <div>
+        {label}
+        <div className="flex gap-2">
+          {[['Yes', true], ['No', false]].map(([lbl, v]) => (
+            <button key={lbl} type="button" onClick={() => onChange(v)}
+              className="flex-1 text-sm py-2.5 rounded-lg border transition"
+              style={value === v
+                ? { borderColor: 'var(--gic-blue)', background: 'rgba(45,31,177,0.06)', color: 'var(--gic-blue)', fontWeight: 600 }
+                : { borderColor: 'var(--gic-line)', color: 'var(--gic-muted)' }}>
+              {lbl}
+            </button>
+          ))}
+        </div>
+      </div>
+    );
+  }
+  return (
+    <div className={def.colSpan === 2 ? 'md:col-span-2' : ''}>
+      {label}
+      <input type={def.type || 'text'} className={base} value={value ?? ''} placeholder={def.placeholder || ''}
+        onChange={e => onChange(e.target.value)} required={def.required} />
+    </div>
+  );
+}
+
+const APPLICATION_STEPS = [
+  {
+    title: 'Personal information',
+    subtitle: 'Tell us how to reach you.',
+    fields: [
+      { key: 'full_name', label: 'Full name', required: true },
+      { key: 'dob', label: 'Date of birth', type: 'date', required: true },
+      { key: 'email', label: 'Email', type: 'email', required: true },
+      { key: 'phone', label: 'Phone' },
+      { key: 'address', label: 'Address', colSpan: 2 },
+      { key: 'city', label: 'City' },
+      { key: 'state', label: 'State' },
+      { key: 'zip', label: 'ZIP' },
+      { key: 'county', label: 'County', required: true },
+      { key: 'emergency_contact_name', label: 'Emergency contact name' },
+      { key: 'emergency_contact_phone', label: 'Emergency contact phone' },
+    ],
+  },
+  {
+    title: 'Eligibility',
+    subtitle: 'A few quick yes/no questions.',
+    fields: [
+      { key: 'age_16_plus', label: 'Are you 16 years or older?', type: 'yesno' },
+      { key: 'work_eligible_us', label: 'Are you legally eligible to work in the U.S.?', type: 'yesno' },
+      { key: 'can_attend_training', label: 'Are you able to attend training + work hours?', type: 'yesno' },
+      { key: 'reliable_transportation', label: 'Do you have reliable transportation?', type: 'yesno' },
+      { key: 'willing_ojt', label: 'Are you willing to complete On-the-Job Training (OJT) hours?', type: 'yesno' },
+    ],
+  },
+  {
+    title: 'Education history',
+    subtitle: '',
+    fields: [
+      { key: 'education_level', label: 'Highest level of education completed', type: 'select',
+        options: ['High School Diploma', 'GED', 'Some College', 'Associate Degree', "Bachelor's Degree", 'Graduate Degree'] },
+      { key: 'school_name', label: 'School name' },
+      { key: 'graduation_year', label: 'Graduation year' },
+      { key: 'education_other', label: 'Other', colSpan: 2 },
+    ],
+  },
+  {
+    title: 'Wealth planning experience',
+    subtitle: 'No experience does not affect eligibility.',
+    fields: [
+      { key: 'experience_years', label: 'Years of related financial services experience', type: 'number' },
+      { key: 'experience_level', label: 'Experience level', type: 'select',
+        options: ['No Experience', 'Beginner (personal budgeting, basic money management)', 'Intermediate (helping family/friends, bookkeeping, accounting)', 'Advanced (professional in financial services)'] },
+      { key: 'experience_explain', label: 'Explain', type: 'textarea', colSpan: 2 },
+      { key: 'exp_budgeting', label: 'Experience with budgeting', type: 'textarea' },
+      { key: 'exp_credit', label: 'Experience with credit repair / building', type: 'textarea' },
+      { key: 'exp_debt', label: 'Experience with debt management', type: 'textarea' },
+      { key: 'exp_banking', label: 'Experience with banking or investment institutions', type: 'textarea' },
+      { key: 'exp_customer_service', label: 'Experience with customer service / client interaction', type: 'textarea' },
+    ],
+  },
+  {
+    title: 'Employment history',
+    subtitle: '',
+    fields: [
+      { key: 'current_employer', label: 'Current employer (if any)' },
+      { key: 'current_position', label: 'Position' },
+      { key: 'current_employment_dates', label: 'Dates of employment' },
+      { key: 'previous_employer', label: 'Previous employer' },
+      { key: 'previous_position', label: 'Position' },
+      { key: 'previous_employment_dates', label: 'Dates of employment' },
+    ],
+  },
+  {
+    title: 'Career goals',
+    subtitle: '',
+    fields: [
+      { key: 'goal_why', label: 'Why are you interested in Wealth Solutions counseling?', type: 'textarea', colSpan: 2, required: true },
+      { key: 'goal_skills', label: 'What skills do you hope to gain?', type: 'textarea', colSpan: 2 },
+      { key: 'goal_longterm', label: 'What are your long-term career goals?', type: 'textarea', colSpan: 2 },
+    ],
+  },
+  { title: 'Skills & client interaction', subtitle: 'Rate your comfort level from 1 (not comfortable) to 5 (very comfortable).', custom: 'skills' },
+  { title: 'Training, documents & supportive services', subtitle: '', custom: 'docs' },
+  { title: 'Demographics', subtitle: 'Optional — required for federal Registered Apprenticeship reporting. "Prefer not to answer" is always available.', custom: 'demographics' },
+  { title: 'Commitment & review', subtitle: 'Review your application before submitting.', custom: 'review' },
+];
+
+function ApplicationForm({ onDone }) {
+  const [stepIdx, setStepIdx] = useState(0);
+  const [form, setForm] = useState(APPLICATION_EMPTY);
+  const [error, setError] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
+
+  const set = (key, val) => setForm(f => ({ ...f, [key]: val }));
+  const setSkill = (key, val) => setForm(f => ({ ...f, skills: { ...f.skills, [key]: val } }));
+  const setDoc = (key, val) => setForm(f => ({ ...f, eligibility_docs: { ...f.eligibility_docs, [key]: val } }));
+  const toggleRace = (opt) => setForm(f => ({
+    ...f, race: f.race.includes(opt) ? f.race.filter(r => r !== opt) : [...f.race, opt]
+  }));
+
+  const step = APPLICATION_STEPS[stepIdx];
+  const isLast = stepIdx === APPLICATION_STEPS.length - 1;
+
+  const validateStep = () => {
+    if (step.fields) {
+      for (const f of step.fields) {
+        if (f.required && !form[f.key] && form[f.key] !== 0) return `Please fill in "${f.label}".`;
+      }
+    }
+    if (step.custom === 'review') {
+      if (!form.agreed_to_commitment) return 'Please agree to the Student Commitment Agreement.';
+      if (!form.signature_name.trim()) return 'Please type your name as your signature.';
+    }
+    return '';
+  };
+
+  const next = () => {
+    const err = validateStep();
+    if (err) { setError(err); return; }
+    setError('');
+    setStepIdx(i => Math.min(i + 1, APPLICATION_STEPS.length - 1));
+  };
+  const back = () => { setError(''); setStepIdx(i => Math.max(i - 1, 0)); };
+
+  const submit = async () => {
+    const err = validateStep();
+    if (err) { setError(err); return; }
+    setSubmitting(true); setError('');
+    try {
+      const payload = {
+        ...form,
+        experience_years: form.experience_years === '' ? null : parseInt(form.experience_years, 10),
+        signed_at: new Date().toISOString()
+      };
+      const { error } = await supabase.from('registrants').insert(payload);
+      if (error) throw error;
+      setSubmitted(true);
+    } catch (e) {
+      setError(e.message || 'Something went wrong submitting your application.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  if (submitted) {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-8" style={{ background: 'var(--gic-bone)' }}>
+        <div className="max-w-xl w-full gic-card p-12 text-center animate-fade-in">
+          <CheckCircle2 size={40} className="mx-auto mb-5" style={{ color: 'var(--gic-green)' }} />
+          <div className="eyebrow mb-3">Application received</div>
+          <h1 className="font-display text-3xl font-semibold mb-4">Thank you, {form.full_name.split(' ')[0] || 'applicant'}.</h1>
+          <p className="text-base mb-8" style={{ color: 'var(--gic-muted)' }}>
+            The GIC team will review your application. Once approved, you'll receive a sponsorship code to complete your enrollment and set up your account.
+          </p>
+          <button onClick={onDone} className="btn-primary">Return to sign in</button>
+          <ComplianceFooter />
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen p-4 lg:p-10" style={{ background: 'var(--gic-bone)' }}>
+      <div className="max-w-3xl mx-auto animate-fade-in">
+        <div className="flex items-center justify-between mb-6">
+          <div className="font-display text-xl font-semibold">Wealth Solutions Counselor Apprenticeship</div>
+          <button onClick={onDone} className="btn-ghost flex items-center gap-1 text-sm"><X size={14}/> Cancel</button>
+        </div>
+
+        {/* Progress */}
+        <div className="flex items-center gap-1 mb-8">
+          {APPLICATION_STEPS.map((s, i) => (
+            <div key={i} className="flex-1 h-1 rounded-full" style={{ background: i <= stepIdx ? 'var(--gic-blue)' : 'var(--gic-line)' }} />
+          ))}
+        </div>
+
+        <div className="gic-card p-6 lg:p-10">
+          <div className="eyebrow mb-2">Step {stepIdx + 1} of {APPLICATION_STEPS.length}</div>
+          <h2 className="font-display text-2xl lg:text-3xl font-semibold mb-2">{step.title}</h2>
+          {step.subtitle && <p className="text-sm mb-8" style={{ color: 'var(--gic-muted)' }}>{step.subtitle}</p>}
+
+          {step.fields && (
+            <div className="grid md:grid-cols-2 gap-5">
+              {step.fields.map(f => (
+                <AppField key={f.key} def={f} value={form[f.key]} onChange={v => set(f.key, v)} />
+              ))}
+            </div>
+          )}
+
+          {step.custom === 'skills' && (
+            <div className="space-y-8">
+              <div className="space-y-4">
+                {SKILLS_LIST.map(([key, label]) => (
+                  <div key={key} className="flex items-center justify-between gap-4">
+                    <div className="text-sm flex-1">{label}</div>
+                    <div className="flex gap-1.5">
+                      {[1,2,3,4,5].map(n => (
+                        <button key={n} type="button" onClick={() => setSkill(key, n)}
+                          className="w-8 h-8 rounded-full text-xs font-semibold border"
+                          style={form.skills[key] === n
+                            ? { borderColor: 'var(--gic-blue)', background: 'var(--gic-blue)', color: 'white' }
+                            : { borderColor: 'var(--gic-line)', color: 'var(--gic-muted)' }}>
+                          {n}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div className="border-t pt-6 space-y-5" style={{ borderColor: 'var(--gic-line)' }}>
+                <AppField def={{ key: 'helped_financial_decisions', label: 'Have you ever helped someone with financial decisions?', type: 'yesno' }}
+                  value={form.helped_financial_decisions} onChange={v => set('helped_financial_decisions', v)} />
+                {form.helped_financial_decisions && (
+                  <AppField def={{ key: 'helped_financial_decisions_explain', label: 'Describe', type: 'textarea' }}
+                    value={form.helped_financial_decisions_explain} onChange={v => set('helped_financial_decisions_explain', v)} />
+                )}
+                <AppField def={{ key: 'comfortable_diverse_communities', label: 'Are you comfortable working with diverse communities?', type: 'yesno' }}
+                  value={form.comfortable_diverse_communities} onChange={v => set('comfortable_diverse_communities', v)} />
+                <AppField def={{ key: 'comfortable_sensitive_topics', label: 'Are you comfortable discussing sensitive financial topics?', type: 'yesno' }}
+                  value={form.comfortable_sensitive_topics} onChange={v => set('comfortable_sensitive_topics', v)} />
+              </div>
+            </div>
+          )}
+
+          {step.custom === 'docs' && (
+            <div className="space-y-8">
+              <AppField def={{ key: 'workshops_completed', label: 'Workshops or trainings completed, if any', type: 'textarea' }}
+                value={form.workshops_completed} onChange={v => set('workshops_completed', v)} />
+              <div>
+                <div className="eyebrow mb-3">Eligibility documents — check what you have ready</div>
+                <div className="grid md:grid-cols-2 gap-2">
+                  {ELIGIBILITY_DOCS_LIST.map(([key, label]) => (
+                    <label key={key} className="flex items-center gap-2 text-sm p-2.5 rounded-lg border cursor-pointer"
+                      style={{ borderColor: 'var(--gic-line)' }}>
+                      <input type="checkbox" checked={!!form.eligibility_docs[key]} onChange={e => setDoc(key, e.target.checked)} />
+                      {label}
+                    </label>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <div className="eyebrow mb-3">Supportive services you may need</div>
+                <div className="grid md:grid-cols-2 gap-2 mb-3">
+                  {[['support_childcare','Childcare'],['support_transportation','Transportation'],['support_tutoring','Tutoring'],
+                    ['support_mental_health','Mental health support'],['support_tech_access','Technology access']].map(([key,label]) => (
+                    <label key={key} className="flex items-center gap-2 text-sm p-2.5 rounded-lg border cursor-pointer"
+                      style={{ borderColor: 'var(--gic-line)' }}>
+                      <input type="checkbox" checked={!!form[key]} onChange={e => set(key, e.target.checked)} />
+                      {label}
+                    </label>
+                  ))}
+                </div>
+                <AppField def={{ key: 'support_other', label: 'Other' }} value={form.support_other} onChange={v => set('support_other', v)} />
+              </div>
+            </div>
+          )}
+
+          {step.custom === 'demographics' && (
+            <div className="grid md:grid-cols-2 gap-5">
+              <AppField def={{ key: 'sex', label: 'Sex', type: 'select', options: ['Male', 'Female', 'Prefer not to answer'] }}
+                value={form.sex} onChange={v => set('sex', v)} />
+              <AppField def={{ key: 'ethnicity', label: 'Ethnicity', type: 'select', options: ['Hispanic or Latino', 'Non-Hispanic or Latino', 'Prefer not to answer'] }}
+                value={form.ethnicity} onChange={v => set('ethnicity', v)} />
+              <div className="md:col-span-2">
+                <label className="eyebrow block mb-2">Race — select all that apply</label>
+                <div className="grid md:grid-cols-2 gap-2">
+                  {RACE_OPTIONS.map(opt => (
+                    <label key={opt} className="flex items-center gap-2 text-sm p-2.5 rounded-lg border cursor-pointer" style={{ borderColor: 'var(--gic-line)' }}>
+                      <input type="checkbox" checked={form.race.includes(opt)} onChange={() => toggleRace(opt)} />
+                      {opt}
+                    </label>
+                  ))}
+                </div>
+              </div>
+              <AppField def={{ key: 'disability', label: 'Disability', type: 'select', options: ['Yes', 'No', 'Prefer not to answer'] }}
+                value={form.disability} onChange={v => set('disability', v)} />
+              <AppField def={{ key: 'veteran_status', label: 'Veteran status', type: 'select',
+                options: ['Non-Veteran', 'Veteran', 'Non-Veteran, Other Eligible Individual', 'Veteran, Eligible', 'Prefer not to answer'] }}
+                value={form.veteran_status} onChange={v => set('veteran_status', v)} />
+              <AppField def={{ key: 'education_level_dol', label: 'Education level', type: 'select',
+                options: ['Not High School graduate', 'High School graduate (including equivalency)', "Some College or Associate's degree", "Bachelor's degree", "Master's degree", 'Doctorate or professional degree', 'Prefer not to answer'] }}
+                value={form.education_level_dol} onChange={v => set('education_level_dol', v)} />
+              <AppField def={{ key: 'employment_status', label: 'Employment status', type: 'select', options: ['New Employee', 'Current Employee'] }}
+                value={form.employment_status} onChange={v => set('employment_status', v)} />
+              <AppField def={{ key: 'pre_apprenticeship_program', label: 'Did you complete a pre-apprenticeship program?', type: 'yesno' }}
+                value={form.pre_apprenticeship_program} onChange={v => set('pre_apprenticeship_program', v)} />
+            </div>
+          )}
+
+          {step.custom === 'review' && (
+            <div className="space-y-6">
+              <div className="gic-card p-5" style={{ background: 'var(--gic-bone)' }}>
+                <div className="font-display font-semibold mb-3">Application summary</div>
+                <div className="grid md:grid-cols-2 gap-x-6 gap-y-1 text-sm">
+                  <div><span style={{ color: 'var(--gic-muted)' }}>Name:</span> {form.full_name || '—'}</div>
+                  <div><span style={{ color: 'var(--gic-muted)' }}>Email:</span> {form.email || '—'}</div>
+                  <div><span style={{ color: 'var(--gic-muted)' }}>County:</span> {form.county || '—'}</div>
+                  <div><span style={{ color: 'var(--gic-muted)' }}>DOB:</span> {form.dob || '—'}</div>
+                  <div><span style={{ color: 'var(--gic-muted)' }}>Education:</span> {form.education_level || '—'}</div>
+                  <div><span style={{ color: 'var(--gic-muted)' }}>Experience level:</span> {form.experience_level || '—'}</div>
+                </div>
+              </div>
+              <div className="border-t pt-6" style={{ borderColor: 'var(--gic-line)' }}>
+                <div className="font-display font-semibold mb-3">Student Commitment Agreement</div>
+                <p className="text-sm mb-4" style={{ color: 'var(--gic-muted)' }}>
+                  I understand that the Wealth Solutions Counselor Apprenticeship Program requires completion of up to 2,000 OJT hours and 144+ RSI hours, attendance at all scheduled trainings, a professional conduct agreement on file, participation in evaluations, and communication with instructors and case managers. I agree to follow program policies and commit to completing the apprenticeship.
+                </p>
+                <label className="flex items-center gap-2 text-sm mb-4">
+                  <input type="checkbox" checked={form.agreed_to_commitment} onChange={e => set('agreed_to_commitment', e.target.checked)} />
+                  I agree to the Student Commitment Agreement above.
+                </label>
+                <AppField def={{ key: 'signature_name', label: 'Type your full legal name as your signature', required: true }}
+                  value={form.signature_name} onChange={v => set('signature_name', v)} />
+              </div>
+              <ComplianceFooter />
+            </div>
+          )}
+
+          {error && (
+            <div className="mt-6 text-sm p-3 border-l-2 flex items-start gap-2" style={{ borderColor: 'var(--gic-rose)', background: 'rgba(184,61,92,0.06)', color: 'var(--gic-rose)' }}>
+              <AlertCircle size={16} className="flex-shrink-0 mt-0.5" />
+              <span>{error}</span>
+            </div>
+          )}
+
+          <div className="flex items-center justify-between mt-8 pt-6 border-t" style={{ borderColor: 'var(--gic-line)' }}>
+            <button type="button" onClick={back} disabled={stepIdx === 0} className="btn-secondary flex items-center gap-1.5 disabled:opacity-40">
+              <ChevronLeft size={14}/> Back
+            </button>
+            {isLast ? (
+              <button type="button" onClick={submit} disabled={submitting} className="btn-primary flex items-center gap-2">
+                {submitting ? <Loader2 size={16} className="animate-spin"/> : <ClipboardCheck size={16}/>}
+                {submitting ? 'Submitting…' : 'Submit application'}
+              </button>
+            ) : (
+              <button type="button" onClick={next} className="btn-primary flex items-center gap-1.5">
+                Next <ChevronRight size={14}/>
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -1215,6 +1690,24 @@ function ModuleView({ module: mod, progress, profile, onBack, onProgressUpdate, 
     // Track lesson read
     supabase.from('lesson_reads')
       .upsert({ user_id: profile.id, module_id: mod.id, lesson_index: currentLesson }, { onConflict: 'user_id,module_id,lesson_index', ignoreDuplicates: true });
+  }, [currentLesson, view, profile?.id, mod.id]);
+
+  // Track time spent on this lesson — flushed to the server whenever the
+  // lesson/view changes or the component unmounts.
+  const lessonStartRef = useRef(null);
+  useEffect(() => {
+    if (!supabase || !profile?.id || view !== 'lesson' || isAdmin) return;
+    lessonStartRef.current = Date.now();
+    const lessonAtStart = currentLesson;
+    return () => {
+      if (!lessonStartRef.current) return;
+      const seconds = Math.round((Date.now() - lessonStartRef.current) / 1000);
+      lessonStartRef.current = null;
+      // Sanity cap — ignore outliers from a tab left open in the background.
+      if (seconds > 0 && seconds < 3600) {
+        supabase.rpc('increment_lesson_time', { p_module_id: mod.id, p_lesson_index: lessonAtStart, p_seconds: seconds }).then(() => {}, () => {});
+      }
+    };
   }, [currentLesson, view, profile?.id, mod.id]);
 
   const saveNote = async (text) => {
@@ -1886,7 +2379,7 @@ function QuizRunner({ mod, quiz, profile, onClose, onComplete }) {
 function AdminDashboard({ modules, profile, onOpenModule, onApprove, onModuleUpdated, onModuleDeleted }) {
   const isApprover = profile?.role === 'approver';
   const isAdmin = profile?.role === 'admin';
-  const [adminTab, setAdminTab] = useState('curriculum'); // curriculum | team | analytics
+  const [adminTab, setAdminTab] = useState('curriculum'); // curriculum | registrants | team | analytics
   const [filter, setFilter] = useState('all'); // all | draft | approved
   const [editingModule, setEditingModule] = useState(null);
   const [showCreateForm, setShowCreateForm] = useState(false);
@@ -1898,18 +2391,30 @@ function AdminDashboard({ modules, profile, onOpenModule, onApprove, onModuleUpd
   const [mentors, setMentors] = useState([]);
   const [teamLoading, setTeamLoading] = useState(false);
   const [savingMentor, setSavingMentor] = useState({});
+  const [pendingRegistrants, setPendingRegistrants] = useState([]);
+  // Registrants tab
+  const [registrants, setRegistrants] = useState([]);
+  const [registrantsLoading, setRegistrantsLoading] = useState(false);
+  const [registrantFilter, setRegistrantFilter] = useState('all'); // all | submitted | approved | closed
+  const [reviewingRegistrant, setReviewingRegistrant] = useState(null);
+  const [sponsors, setSponsors] = useState([]);
   // Analytics tab
   const [analytics, setAnalytics] = useState(null);
   const [analyticsLoading, setAnalyticsLoading] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [analyticsFilters, setAnalyticsFilters] = useState({ county: '', sponsorId: '', ageMin: '', ageMax: '', progressMin: '', progressMax: '' });
+  const [selectedIds, setSelectedIds] = useState(new Set());
+  const [viewingApprenticeProfile, setViewingApprenticeProfile] = useState(null);
 
   useEffect(() => {
     if (adminTab !== 'team' || !supabase) return;
     setTeamLoading(true);
     Promise.all([
       supabase.from('profiles').select('id,full_name,email,mentor_id,created_at').eq('role', 'apprentice').order('full_name'),
-      supabase.from('profiles').select('id,full_name,email').in('role', ['mentor','admin','approver']).order('full_name')
-    ]).then(([{ data: app }, { data: men }]) => {
+      supabase.from('profiles').select('id,full_name,email').in('role', ['mentor','admin','approver']).order('full_name'),
+      supabase.from('registrants').select('id,full_name,email,sponsor_id,mentor_id,reviewed_at').eq('status', 'approved').is('activated_profile_id', null),
+      supabase.from('employer_sponsors').select('id,name')
+    ]).then(([{ data: app }, { data: men }, { data: pending }, { data: sp }]) => {
       setApprentices(app || []);
       // Deduplicate mentors by email — keep the one with a full_name set
       const seen = new Map();
@@ -1918,36 +2423,134 @@ function AdminDashboard({ modules, profile, onOpenModule, onApprove, onModuleUpd
         if (!existing || (!existing.full_name && m.full_name)) seen.set(m.email, m);
       });
       setMentors(Array.from(seen.values()));
+      setPendingRegistrants(pending || []);
+      setSponsors(sp || []);
       setTeamLoading(false);
     });
+  }, [adminTab]);
+
+  useEffect(() => {
+    if (adminTab !== 'registrants' || !supabase) return;
+    setRegistrantsLoading(true);
+    Promise.all([
+      supabase.from('registrants').select('*').order('created_at', { ascending: false }),
+      supabase.from('employer_sponsors').select('*').eq('active', true).order('name'),
+      mentors.length ? Promise.resolve({ data: mentors }) : supabase.from('profiles').select('id,full_name,email').in('role', ['mentor','admin','approver']).order('full_name')
+    ]).then(([{ data: regs }, { data: sp }, { data: men }]) => {
+      setRegistrants(regs || []);
+      setSponsors(sp || []);
+      if (!mentors.length && men) {
+        const seen = new Map();
+        men.forEach(m => {
+          const existing = seen.get(m.email);
+          if (!existing || (!existing.full_name && m.full_name)) seen.set(m.email, m);
+        });
+        setMentors(Array.from(seen.values()));
+      }
+      setRegistrantsLoading(false);
+    });
+
+    const channel = supabase
+      .channel('registrants-admin')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'registrants' }, payload => {
+        if (payload.eventType === 'INSERT') {
+          setRegistrants(prev => [payload.new, ...prev]);
+        } else if (payload.eventType === 'UPDATE') {
+          setRegistrants(prev => prev.map(r => r.id === payload.new.id ? payload.new : r));
+        }
+      })
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
   }, [adminTab]);
 
   useEffect(() => {
     if (adminTab !== 'analytics' || !supabase || analytics) return;
     setAnalyticsLoading(true);
     (async () => {
-      const [{ data: app }, { data: prog }, { data: subs }] = await Promise.all([
-        supabase.from('profiles').select('id,full_name,email,created_at').eq('role', 'apprentice'),
-        supabase.from('module_progress').select('user_id,status,best_quiz_score,updated_at'),
-        supabase.from('competency_submissions').select('apprentice_id,status,ojl_hours_credited')
+      const [{ data: app }, { data: regs }, { data: prog }, { data: subs }, { data: logins }, { data: reads }, { data: sp }, { data: men }] = await Promise.all([
+        supabase.from('profiles').select('id,full_name,email,created_at,employer_sponsor_id,mentor_id,last_active_at').eq('role', 'apprentice'),
+        supabase.from('registrants').select('activated_profile_id,dob,county').not('activated_profile_id', 'is', null),
+        supabase.from('module_progress').select('user_id,status,best_quiz_score,quiz_attempts,updated_at'),
+        supabase.from('competency_submissions').select('apprentice_id,status,ojl_hours_credited'),
+        supabase.from('login_events').select('user_id,logged_in_at'),
+        supabase.from('lesson_reads').select('user_id,seconds_spent'),
+        supabase.from('employer_sponsors').select('id,name'),
+        mentors.length ? Promise.resolve({ data: mentors }) : supabase.from('profiles').select('id,full_name,email').in('role', ['mentor','admin','approver']).order('full_name')
       ]);
+
+      if (!mentors.length && men) {
+        const seen = new Map();
+        men.forEach(m => {
+          const existing = seen.get(m.email);
+          if (!existing || (!existing.full_name && m.full_name)) seen.set(m.email, m);
+        });
+        setMentors(Array.from(seen.values()));
+      }
+      const mentorList = mentors.length ? mentors : (men || []);
+      const mentorNameById = {}; mentorList.forEach(m => { mentorNameById[m.id] = m.full_name || m.email; });
+      const sponsorNameById = {}; (sp || []).forEach(s => { sponsorNameById[s.id] = s.name; });
+      const regByProfile = {}; (regs || []).forEach(r => { if (r.activated_profile_id) regByProfile[r.activated_profile_id] = r; });
+
       const approvedCount = modules.filter(m => m.status === 'approved').length;
       const byUser = {};
-      (app || []).forEach(a => { byUser[a.id] = { ...a, completed: 0, inProgress: 0, scores: [], ojlHours: 0, lastActive: null }; });
+      (app || []).forEach(a => {
+        const reg = regByProfile[a.id];
+        byUser[a.id] = {
+          ...a, completed: 0, inProgress: 0, scores: [], quizAttempts: 0, ojlHours: 0,
+          lastActive: a.last_active_at || null, loginCount: 0, secondsSpent: 0,
+          county: reg?.county || null, dob: reg?.dob || null,
+          sponsorName: a.employer_sponsor_id ? (sponsorNameById[a.employer_sponsor_id] || null) : null,
+          mentorName: a.mentor_id ? (mentorNameById[a.mentor_id] || null) : null,
+        };
+      });
       (prog || []).forEach(p => {
-        if (!byUser[p.user_id]) return;
-        if (p.status === 'completed') byUser[p.user_id].completed++;
-        if (p.status === 'in_progress') byUser[p.user_id].inProgress++;
-        if (p.best_quiz_score) byUser[p.user_id].scores.push(p.best_quiz_score);
-        if (!byUser[p.user_id].lastActive || p.updated_at > byUser[p.user_id].lastActive) byUser[p.user_id].lastActive = p.updated_at;
+        const u = byUser[p.user_id]; if (!u) return;
+        if (p.status === 'completed') u.completed++;
+        if (p.status === 'in_progress') u.inProgress++;
+        if (p.best_quiz_score) u.scores.push(p.best_quiz_score);
+        u.quizAttempts += (p.quiz_attempts || 0);
+        if (!u.lastActive || p.updated_at > u.lastActive) u.lastActive = p.updated_at;
       });
       (subs || []).forEach(s => {
         if (byUser[s.apprentice_id] && s.status === 'approved') byUser[s.apprentice_id].ojlHours += (s.ojl_hours_credited || 0);
       });
+      (logins || []).forEach(l => {
+        const u = byUser[l.user_id]; if (!u) return;
+        u.loginCount++;
+        if (!u.lastActive || l.logged_in_at > u.lastActive) u.lastActive = l.logged_in_at;
+      });
+      (reads || []).forEach(r => {
+        const u = byUser[r.user_id]; if (u) u.secondsSpent += (r.seconds_spent || 0);
+      });
+
       setAnalytics({ rows: Object.values(byUser), approvedModules: approvedCount });
       setAnalyticsLoading(false);
     })();
   }, [adminTab, modules]);
+
+  const ageFromDob = (dob) => {
+    if (!dob) return null;
+    return Math.floor((Date.now() - new Date(dob).getTime()) / (365.25 * 24 * 3600 * 1000));
+  };
+
+  const analyticsFiltered = (analytics?.rows || []).filter(r => {
+    if (analyticsFilters.county && r.county !== analyticsFilters.county) return false;
+    if (analyticsFilters.sponsorId && r.employer_sponsor_id !== analyticsFilters.sponsorId) return false;
+    const age = ageFromDob(r.dob);
+    if (analyticsFilters.ageMin && (age === null || age < parseInt(analyticsFilters.ageMin, 10))) return false;
+    if (analyticsFilters.ageMax && (age === null || age > parseInt(analyticsFilters.ageMax, 10))) return false;
+    const pct = analytics?.approvedModules > 0 ? Math.round((r.completed / analytics.approvedModules) * 100) : 0;
+    if (analyticsFilters.progressMin && pct < parseInt(analyticsFilters.progressMin, 10)) return false;
+    if (analyticsFilters.progressMax && pct > parseInt(analyticsFilters.progressMax, 10)) return false;
+    return true;
+  });
+
+  const toggleSelected = (id) => setSelectedIds(prev => {
+    const next = new Set(prev);
+    next.has(id) ? next.delete(id) : next.add(id);
+    return next;
+  });
 
   const assignMentor = async (apprenticeId, mentorId) => {
     setSavingMentor(prev => ({ ...prev, [apprenticeId]: true }));
@@ -1974,6 +2577,30 @@ function AdminDashboard({ modules, profile, onOpenModule, onApprove, onModuleUpd
       const a = document.createElement('a');
       a.href = url;
       a.download = `gic-progress-${new Date().toISOString().slice(0,10)}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e) { alert('Export failed: ' + e.message); }
+    setExporting(false);
+  };
+
+  const exportAnalyticsCSV = async (userIds) => {
+    setExporting(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch('/.netlify/functions/export-registrants-analytics', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(session?.access_token ? { 'Authorization': 'Bearer ' + session.access_token } : {})
+        },
+        body: JSON.stringify({ userIds })
+      });
+      if (!res.ok) throw new Error('Export failed: ' + res.status);
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `gic-analytics-${new Date().toISOString().slice(0,10)}.csv`;
       a.click();
       URL.revokeObjectURL(url);
     } catch (e) { alert('Export failed: ' + e.message); }
@@ -2023,12 +2650,13 @@ function AdminDashboard({ modules, profile, onOpenModule, onApprove, onModuleUpd
 
       {/* Admin tab bar */}
       <div className="flex gap-1 mb-8 border-b" style={{ borderColor: 'var(--gic-line)' }}>
-        {[['curriculum','Curriculum'],['team','Team'],['analytics','Analytics']].map(([id,label]) => (
+        {[['curriculum','Curriculum'],['registrants','Registrants'],['team','Team'],['analytics','Analytics']].map(([id,label]) => (
           <button key={id} onClick={() => setAdminTab(id)}
-            className="px-5 py-3 text-sm font-medium"
+            className="px-5 py-3 text-sm font-medium flex items-center gap-1.5"
             style={{ borderBottom: adminTab===id ? '2px solid var(--gic-blue)' : '2px solid transparent',
                      color: adminTab===id ? 'var(--gic-blue)' : 'var(--gic-muted)', marginBottom: '-1px' }}>
             {label}
+            {id === 'registrants' && <NavBadge count={registrants.filter(r => r.status === 'submitted').length} />}
           </button>
         ))}
       </div>
@@ -2094,9 +2722,94 @@ function AdminDashboard({ modules, profile, onOpenModule, onApprove, onModuleUpd
       </div>
       </>}
 
+      {adminTab === 'registrants' && (
+        registrantsLoading ? <LoadingScreen /> : (
+          <div>
+            <div className="mb-6 flex items-center gap-2 flex-wrap">
+              <span className="eyebrow mr-2">Filter</span>
+              {[
+                { id: 'all',       label: `All (${registrants.length})` },
+                { id: 'submitted', label: `Submitted (${registrants.filter(r => r.status === 'submitted').length})` },
+                { id: 'approved',  label: `Approved (${registrants.filter(r => r.status === 'approved').length})` },
+                { id: 'closed',    label: `Closed (${registrants.filter(r => r.status === 'closed').length})` },
+              ].map(f => (
+                <button key={f.id} onClick={() => setRegistrantFilter(f.id)}
+                        className={`badge ${registrantFilter === f.id ? '' : 'opacity-50'}`}
+                        style={registrantFilter === f.id
+                          ? { color: 'var(--gic-blue)', background: 'rgba(45,31,177,0.06)', cursor: 'pointer' }
+                          : { color: 'var(--gic-warm)', cursor: 'pointer' }}>
+                  {f.label}
+                </button>
+              ))}
+            </div>
+
+            {registrants.filter(r => registrantFilter === 'all' ? true : r.status === registrantFilter).length === 0 ? (
+              <div className="gic-card p-10 text-center">
+                <ClipboardCheck size={28} className="mx-auto mb-3" style={{ color: 'var(--gic-warm)' }}/>
+                <div className="font-display text-xl font-semibold mb-2">No applications</div>
+                <p className="text-sm" style={{ color: 'var(--gic-muted)' }}>Applications appear here once someone submits the public application form.</p>
+              </div>
+            ) : (
+              <div className="gic-card divide-y" style={{ borderColor: 'var(--gic-line)' }}>
+                {registrants.filter(r => registrantFilter === 'all' ? true : r.status === registrantFilter).map(r => (
+                  <button key={r.id} onClick={() => setReviewingRegistrant(r)}
+                    className="w-full text-left p-5 flex items-center gap-4 hover:bg-stone-50 transition-colors">
+                    <div className="w-10 h-10 rounded-full flex items-center justify-center font-semibold text-sm flex-shrink-0"
+                      style={{ background: 'rgba(45,31,177,0.08)', color: 'var(--gic-blue)' }}>
+                      {(r.full_name || r.email || '?').slice(0,1).toUpperCase()}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium truncate">{r.full_name}</div>
+                      <div className="text-xs truncate" style={{ color: 'var(--gic-muted)' }}>
+                        {r.email} · Submitted {new Date(r.created_at).toLocaleDateString()}
+                        {r.county ? ` · ${r.county} County` : ''}
+                      </div>
+                    </div>
+                    <span className="badge flex-shrink-0" style={{
+                      color:      r.status === 'approved' ? 'var(--gic-green)' : r.status === 'closed' ? 'var(--gic-warm)' : 'var(--gic-blue)',
+                      background: r.status === 'approved' ? 'rgba(31,122,74,0.08)' : r.status === 'closed' ? 'rgba(138,116,94,0.08)' : 'rgba(45,31,177,0.06)'
+                    }}>{r.status}</span>
+                    <ChevronRight size={16} style={{ color: 'var(--gic-warm)' }} className="flex-shrink-0" />
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )
+      )}
+
       {adminTab === 'team' && (
         teamLoading ? <LoadingScreen /> : (
           <div>
+            {pendingRegistrants.length > 0 && (
+              <div className="mb-10">
+                <div className="font-display text-lg font-semibold mb-1">Approved — awaiting activation</div>
+                <p className="text-sm mb-4" style={{ color: 'var(--gic-muted)' }}>
+                  Approved applicants who haven't yet redeemed their sponsorship code to set up their account.
+                </p>
+                <div className="gic-card divide-y" style={{ borderColor: 'var(--gic-line)' }}>
+                  {pendingRegistrants.map(r => (
+                    <div key={r.id} className="p-5 flex items-center gap-4">
+                      <div className="w-10 h-10 rounded-full flex items-center justify-center font-semibold text-sm flex-shrink-0"
+                        style={{ background: 'rgba(200,132,28,0.12)', color: '#C8841C' }}>
+                        {(r.full_name || r.email || '?').slice(0,1).toUpperCase()}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="font-medium truncate">{r.full_name}</div>
+                        <div className="text-xs truncate" style={{ color: 'var(--gic-muted)' }}>
+                          {r.email}
+                          {r.sponsor_id ? ` · ${sponsors.find(s => s.id === r.sponsor_id)?.name || 'Sponsor'}` : ''}
+                          {r.mentor_id ? ` · Mentor: ${mentors.find(m => m.id === r.mentor_id)?.full_name || 'Assigned'}` : ''}
+                        </div>
+                      </div>
+                      <span className="badge flex-shrink-0" style={{ color: '#C8841C', background: 'rgba(200,132,28,0.1)' }}>
+                        Code not yet redeemed
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
             <p className="text-sm mb-6" style={{ color: 'var(--gic-muted)' }}>Assign a mentor to each apprentice. Mentors review OJL submissions and answer questions from their assigned apprentices.</p>
             {apprentices.length === 0 ? (
               <div className="gic-card p-10 text-center">
@@ -2140,52 +2853,125 @@ function AdminDashboard({ modules, profile, onOpenModule, onApprove, onModuleUpd
       {adminTab === 'analytics' && (
         analyticsLoading || !analytics ? <LoadingScreen /> : (
           <div>
-            <div className="flex items-center justify-between mb-6">
-              <p className="text-sm" style={{ color: 'var(--gic-muted)' }}>Cohort overview — {analytics.rows.length} apprentice{analytics.rows.length !== 1 ? 's' : ''} enrolled.</p>
-              <button onClick={exportCSV} disabled={exporting} className="btn-secondary flex items-center gap-2 text-sm">
-                <Download size={13}/>{exporting ? 'Exporting…' : 'Export RAPIDS CSV'}
-              </button>
+            <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
+              <p className="text-sm" style={{ color: 'var(--gic-muted)' }}>
+                Cohort overview — {analyticsFiltered.length} of {analytics.rows.length} apprentice{analytics.rows.length !== 1 ? 's' : ''} shown.
+              </p>
+              <div className="flex items-center gap-2">
+                <button onClick={exportCSV} disabled={exporting} className="btn-secondary flex items-center gap-2 text-sm">
+                  <Download size={13}/>{exporting ? 'Exporting…' : 'Export RAPIDS CSV'}
+                </button>
+                <button onClick={() => exportAnalyticsCSV(selectedIds.size ? Array.from(selectedIds) : analyticsFiltered.map(r => r.id))} disabled={exporting}
+                  className="btn-primary flex items-center gap-2 text-sm">
+                  <Download size={13}/>{selectedIds.size ? `Export selected (${selectedIds.size})` : 'Export filtered'}
+                </button>
+              </div>
             </div>
+
+            {/* Filters */}
+            <div className="gic-card p-4 mb-6 grid md:grid-cols-5 gap-3">
+              <div>
+                <label className="eyebrow block mb-1" style={{ fontSize: 9 }}>County</label>
+                <select className="gic-input text-sm" value={analyticsFilters.county} onChange={e => setAnalyticsFilters(f => ({ ...f, county: e.target.value }))}>
+                  <option value="">All</option>
+                  {Array.from(new Set(analytics.rows.map(r => r.county).filter(Boolean))).sort().map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="eyebrow block mb-1" style={{ fontSize: 9 }}>Sponsor</label>
+                <select className="gic-input text-sm" value={analyticsFilters.sponsorId} onChange={e => setAnalyticsFilters(f => ({ ...f, sponsorId: e.target.value }))}>
+                  <option value="">All</option>
+                  {Array.from(new Map(analytics.rows.filter(r => r.employer_sponsor_id).map(r => [r.employer_sponsor_id, r.sponsorName])).entries())
+                    .map(([id, name]) => <option key={id} value={id}>{name || id}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="eyebrow block mb-1" style={{ fontSize: 9 }}>Age range</label>
+                <div className="flex items-center gap-1">
+                  <input type="number" className="gic-input text-sm" placeholder="Min" value={analyticsFilters.ageMin} onChange={e => setAnalyticsFilters(f => ({ ...f, ageMin: e.target.value }))} />
+                  <input type="number" className="gic-input text-sm" placeholder="Max" value={analyticsFilters.ageMax} onChange={e => setAnalyticsFilters(f => ({ ...f, ageMax: e.target.value }))} />
+                </div>
+              </div>
+              <div>
+                <label className="eyebrow block mb-1" style={{ fontSize: 9 }}>Progress % range</label>
+                <div className="flex items-center gap-1">
+                  <input type="number" className="gic-input text-sm" placeholder="Min" value={analyticsFilters.progressMin} onChange={e => setAnalyticsFilters(f => ({ ...f, progressMin: e.target.value }))} />
+                  <input type="number" className="gic-input text-sm" placeholder="Max" value={analyticsFilters.progressMax} onChange={e => setAnalyticsFilters(f => ({ ...f, progressMax: e.target.value }))} />
+                </div>
+              </div>
+              <div className="flex items-end">
+                <button onClick={() => setAnalyticsFilters({ county: '', sponsorId: '', ageMin: '', ageMax: '', progressMin: '', progressMax: '' })}
+                  className="btn-ghost text-sm">Clear filters</button>
+              </div>
+            </div>
+
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-px mb-8 border" style={{ borderColor: 'var(--gic-line)', background: 'var(--gic-line)' }}>
-              <Stat label="Enrolled" value={analytics.rows.length} />
+              <Stat label="Shown" value={analyticsFiltered.length} />
               <Stat label="Avg Completion" value={
-                analytics.rows.length
-                  ? Math.round(analytics.rows.reduce((s, r) => s + (r.completed / (analytics.approvedModules || 1)), 0) / analytics.rows.length * 100) + '%'
+                analyticsFiltered.length
+                  ? Math.round(analyticsFiltered.reduce((s, r) => s + (r.completed / (analytics.approvedModules || 1)), 0) / analyticsFiltered.length * 100) + '%'
                   : '—'
               } />
-              <Stat label="Fully Complete" value={analytics.rows.filter(r => r.completed >= analytics.approvedModules && analytics.approvedModules > 0).length} />
-              <Stat label="Not Started" value={analytics.rows.filter(r => r.completed === 0 && r.inProgress === 0).length} />
+              <Stat label="Fully Complete" value={analyticsFiltered.filter(r => r.completed >= analytics.approvedModules && analytics.approvedModules > 0).length} />
+              <Stat label="Not Started" value={analyticsFiltered.filter(r => r.completed === 0 && r.inProgress === 0).length} />
             </div>
+
             <div className="gic-card divide-y" style={{ borderColor: 'var(--gic-line)' }}>
-              <div className="grid grid-cols-12 px-5 py-2.5 text-xs font-semibold" style={{ color: 'var(--gic-muted)' }}>
-                <div className="col-span-4">Apprentice</div>
+              <div className="grid grid-cols-12 px-5 py-2.5 text-xs font-semibold items-center" style={{ color: 'var(--gic-muted)' }}>
+                <div className="col-span-1"></div>
+                <div className="col-span-3">Apprentice</div>
                 <div className="col-span-2 text-center">Progress</div>
                 <div className="col-span-2 text-center">Quiz Avg</div>
-                <div className="col-span-2 text-center">OJL Hours</div>
+                <div className="col-span-2 text-center">Logins</div>
                 <div className="col-span-2 text-right">Last Active</div>
               </div>
-              {analytics.rows.sort((a,b) => b.completed - a.completed).map(r => {
+              {analyticsFiltered.sort((a,b) => b.completed - a.completed).map(r => {
                 const pct = analytics.approvedModules > 0 ? Math.round((r.completed / analytics.approvedModules) * 100) : 0;
                 const avgScore = r.scores.length ? Math.round(r.scores.reduce((s,x)=>s+x,0)/r.scores.length) : null;
+                const age = ageFromDob(r.dob);
                 return (
-                  <div key={r.id} className="grid grid-cols-12 px-5 py-4 items-center">
-                    <div className="col-span-4">
-                      <div className="font-medium text-sm">{r.full_name || r.email}</div>
-                      <div className="text-xs" style={{ color: 'var(--gic-muted)' }}>{r.email}</div>
+                  <div key={r.id} className="px-5 py-4">
+                    <div className="grid grid-cols-12 items-center">
+                      <div className="col-span-1">
+                        <input type="checkbox" checked={selectedIds.has(r.id)} onChange={() => toggleSelected(r.id)} />
+                      </div>
+                      <div className="col-span-3 min-w-0">
+                        <button onClick={() => setViewingApprenticeProfile(r.id)} className="font-medium text-sm hover:underline text-left truncate block" style={{ color: 'var(--gic-blue)' }}>
+                          {r.full_name || r.email}
+                        </button>
+                        <div className="text-xs truncate" style={{ color: 'var(--gic-muted)' }}>
+                          {r.email}{r.county ? ` · ${r.county}` : ''}{age !== null ? ` · Age ${age}` : ''}
+                        </div>
+                        <div className="text-xs truncate" style={{ color: 'var(--gic-warm)' }}>
+                          {r.sponsorName || 'No sponsor'} · {r.mentorName || 'No mentor'}
+                        </div>
+                      </div>
+                      <div className="col-span-2 text-center">
+                        <div className="text-sm font-semibold">{pct}%</div>
+                        <div className="text-xs" style={{ color: 'var(--gic-muted)' }}>{r.completed}/{analytics.approvedModules} modules</div>
+                      </div>
+                      <div className="col-span-2 text-center text-sm">{avgScore !== null ? avgScore + '%' : '—'}</div>
+                      <div className="col-span-2 text-center text-sm">{r.loginCount}</div>
+                      <div className="col-span-2 text-right text-xs" style={{ color: 'var(--gic-warm)' }}>{r.lastActive ? fmtRelative(r.lastActive) : 'Never'}</div>
                     </div>
-                    <div className="col-span-2 text-center">
-                      <div className="text-sm font-semibold">{pct}%</div>
-                      <div className="text-xs" style={{ color: 'var(--gic-muted)' }}>{r.completed}/{analytics.approvedModules} modules</div>
+                    <div className="flex items-center gap-4 mt-2 pl-[calc(8.33%+0px)] text-xs" style={{ color: 'var(--gic-muted)' }}>
+                      <span>Quiz attempts: {r.quizAttempts}</span>
+                      <span>OJL hours: {r.ojlHours || 0}h</span>
+                      <span>Time on lessons: {r.secondsSpent >= 60 ? Math.round(r.secondsSpent / 60) + ' min' : (r.secondsSpent || 0) + ' sec'}</span>
                     </div>
-                    <div className="col-span-2 text-center text-sm">{avgScore !== null ? avgScore + '%' : '—'}</div>
-                    <div className="col-span-2 text-center text-sm">{r.ojlHours > 0 ? r.ojlHours + 'h' : '—'}</div>
-                    <div className="col-span-2 text-right text-xs" style={{ color: 'var(--gic-warm)' }}>{r.lastActive ? fmtRelative(r.lastActive) : 'Never'}</div>
                   </div>
                 );
               })}
+              {analyticsFiltered.length === 0 && (
+                <div className="p-10 text-center text-sm" style={{ color: 'var(--gic-muted)' }}>No apprentices match these filters.</div>
+              )}
             </div>
           </div>
         )
+      )}
+
+      {viewingApprenticeProfile && (
+        <ApprenticeProfileModal profileId={viewingApprenticeProfile} onClose={() => setViewingApprenticeProfile(null)} />
       )}
 
       {editingModule && (
@@ -2193,6 +2979,21 @@ function AdminDashboard({ modules, profile, onOpenModule, onApprove, onModuleUpd
           mod={editingModule}
           onClose={() => setEditingModule(null)}
           onSaved={(updated) => { setEditingModule(null); onModuleUpdated && onModuleUpdated(updated); }}
+        />
+      )}
+
+      {reviewingRegistrant && (
+        <RegistrantReview
+          registrant={reviewingRegistrant}
+          sponsors={sponsors}
+          setSponsors={setSponsors}
+          mentors={mentors}
+          profile={profile}
+          onClose={() => setReviewingRegistrant(null)}
+          onUpdated={(updated) => {
+            setRegistrants(prev => prev.map(r => r.id === updated.id ? updated : r));
+            setReviewingRegistrant(updated);
+          }}
         />
       )}
     </main>
@@ -3600,6 +4401,488 @@ function MentorDashboard({ profile, modules, onViewSubmission }) {
         )
       )}
     </main>
+  );
+}
+
+// ============================================================
+// REGISTRANT REVIEW — admin review panel for a single application
+// ============================================================
+const CATHY_EMAIL = 'cathy@globalinvestmentcompanies.com';
+
+function regFormatVal(v) {
+  if (v === null || v === undefined || v === '') return '—';
+  if (v === true) return 'Yes';
+  if (v === false) return 'No';
+  if (Array.isArray(v)) return v.length ? v.join(', ') : '—';
+  return String(v);
+}
+
+function RegRow({ label, value }) {
+  return (
+    <div className="flex justify-between gap-4 py-1.5 text-sm">
+      <span style={{ color: 'var(--gic-muted)' }}>{label}</span>
+      <span className="text-right">{regFormatVal(value)}</span>
+    </div>
+  );
+}
+
+function RegSection({ title, children }) {
+  return (
+    <div className="mb-6">
+      <div className="eyebrow mb-2">{title}</div>
+      <div className="divide-y" style={{ borderColor: 'var(--gic-line)' }}>{children}</div>
+    </div>
+  );
+}
+
+function SeatsExceededModal({ sponsor, onAddSeats, onChooseDifferent, onCancel }) {
+  const [extra, setExtra] = useState(5);
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4" style={{ background: 'rgba(15,22,49,0.6)', backdropFilter: 'blur(6px)' }}>
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6">
+        <AlertTriangle size={28} style={{ color: 'var(--gic-rose)' }} className="mb-3"/>
+        <div className="font-display text-lg font-semibold mb-2">No seats available</div>
+        <p className="text-sm mb-5" style={{ color: 'var(--gic-muted)' }}>
+          <strong>{sponsor.name}</strong> has used all {sponsor.seats_total} of its seats. Add more seats for this sponsor, or assign this applicant to a different sponsor.
+        </p>
+        <div className="flex items-center gap-3 mb-5">
+          <input type="number" min="1" className="gic-input" value={extra} onChange={e => setExtra(parseInt(e.target.value, 10) || 0)} />
+          <button onClick={() => onAddSeats(extra)} disabled={!extra} className="btn-primary flex-shrink-0">Add seats</button>
+        </div>
+        <div className="flex gap-3">
+          <button onClick={onChooseDifferent} className="btn-secondary flex-1">Choose different sponsor</button>
+          <button onClick={onCancel} className="btn-ghost flex-1">Cancel</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function RegistrantReview({ registrant, sponsors, setSponsors, mentors, profile, onClose, onUpdated }) {
+  const defaultMentorId = registrant.mentor_id || mentors.find(m => m.email === CATHY_EMAIL)?.id || '';
+  const [mentorId, setMentorIdState] = useState(defaultMentorId);
+  const [tokenText, setTokenText] = useState('');
+  const [showSponsorForm, setShowSponsorForm] = useState(false);
+  const [seatsExceededSponsor, setSeatsExceededSponsor] = useState(null);
+  const [seatCounts, setSeatCounts] = useState({});
+  const [generating, setGenerating] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [showCloseForm, setShowCloseForm] = useState(false);
+  const [closeReason, setCloseReason] = useState('');
+  const [closing, setClosing] = useState(false);
+  const [approving, setApproving] = useState(false);
+  const mountedRef = useRef(false);
+
+  useEffect(() => {
+    if (!registrant.sponsor_token_id) { setTokenText(''); return; }
+    supabase.from('sponsorship_tokens').select('token').eq('id', registrant.sponsor_token_id).maybeSingle()
+      .then(({ data }) => { if (data) setTokenText(data.token); });
+  }, [registrant.sponsor_token_id]);
+
+  useEffect(() => {
+    supabase.from('registrants').select('sponsor_id').not('sponsor_token_id', 'is', null).neq('status', 'closed')
+      .then(({ data }) => {
+        const counts = {};
+        (data || []).forEach(r => { if (r.sponsor_id) counts[r.sponsor_id] = (counts[r.sponsor_id] || 0) + 1; });
+        setSeatCounts(counts);
+      });
+  }, [registrant.sponsor_id, registrant.sponsor_token_id]);
+
+  // Pre-select Cathy as mentor the first time this application is opened, so
+  // it's visibly the default without requiring an extra click.
+  useEffect(() => {
+    if (mountedRef.current) return;
+    mountedRef.current = true;
+    if (!registrant.mentor_id && defaultMentorId) {
+      supabase.from('registrants').update({ mentor_id: defaultMentorId }).eq('id', registrant.id)
+        .select().single().then(({ data }) => { if (data) onUpdated(data); });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const saveMentor = async (id) => {
+    setMentorIdState(id);
+    const { data, error } = await supabase.from('registrants').update({ mentor_id: id || null }).eq('id', registrant.id).select().single();
+    if (!error && data) onUpdated(data);
+  };
+
+  const saveSponsor = async (id) => {
+    const { data, error } = await supabase.from('registrants').update({ sponsor_id: id || null }).eq('id', registrant.id).select().single();
+    if (!error && data) onUpdated(data);
+  };
+
+  const addSponsor = async (form) => {
+    const { data, error } = await supabase.from('employer_sponsors').insert({ ...form, created_by: profile.id }).select().single();
+    if (error) { alert('Failed: ' + error.message); return; }
+    setSponsors(prev => [data, ...prev]);
+    setShowSponsorForm(false);
+    saveSponsor(data.id);
+  };
+
+  const generateCode = async (sponsorOverride) => {
+    const sponsor = sponsorOverride || sponsors.find(s => s.id === registrant.sponsor_id);
+    if (!sponsor) return;
+    setGenerating(true);
+    if (sponsor.seats_total != null && (seatCounts[sponsor.id] || 0) >= sponsor.seats_total) {
+      setGenerating(false);
+      setSeatsExceededSponsor(sponsor);
+      return;
+    }
+    const rand = () => Math.random().toString(36).toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 4).padEnd(4, 'X');
+    const token = `GIC-${rand()}-${rand()}`;
+    const { data: tok, error: tokErr } = await supabase.from('sponsorship_tokens').insert({
+      token, employer_sponsor_id: sponsor.id, max_uses: 1, registrant_id: registrant.id, created_by: profile.id
+    }).select().single();
+    if (tokErr) { setGenerating(false); alert('Failed to generate code: ' + tokErr.message); return; }
+    const { data: reg, error: regErr } = await supabase.from('registrants')
+      .update({ sponsor_id: sponsor.id, sponsor_token_id: tok.id }).eq('id', registrant.id).select().single();
+    setGenerating(false);
+    if (regErr) { alert('Code created but failed to link: ' + regErr.message); return; }
+    setTokenText(tok.token);
+    setSeatCounts(prev => ({ ...prev, [sponsor.id]: (prev[sponsor.id] || 0) + 1 }));
+    onUpdated(reg);
+  };
+
+  const addSeatsAndRetry = async (extra) => {
+    if (!seatsExceededSponsor || !extra) return;
+    const newTotal = (seatsExceededSponsor.seats_total || 0) + extra;
+    const { data, error } = await supabase.from('employer_sponsors').update({ seats_total: newTotal }).eq('id', seatsExceededSponsor.id).select().single();
+    if (error) { alert('Failed: ' + error.message); return; }
+    setSponsors(prev => prev.map(s => s.id === data.id ? data : s));
+    setSeatsExceededSponsor(null);
+    generateCode(data);
+  };
+
+  const copyCode = () => {
+    navigator.clipboard.writeText(tokenText);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  };
+
+  const canApprove = !!registrant.sponsor_id && !!registrant.sponsor_token_id && !!registrant.mentor_id && registrant.status !== 'approved';
+
+  const approve = async () => {
+    setApproving(true);
+    const { data, error } = await supabase.from('registrants').update({
+      status: 'approved', reviewed_by: profile.id, reviewed_at: new Date().toISOString()
+    }).eq('id', registrant.id).select().single();
+    setApproving(false);
+    if (error) { alert('Failed: ' + error.message); return; }
+    onUpdated(data);
+  };
+
+  const doClose = async () => {
+    setClosing(true);
+    const { data, error } = await supabase.from('registrants').update({
+      status: 'closed', closed_reason: closeReason.trim() || null, reviewed_by: profile.id, reviewed_at: new Date().toISOString()
+    }).eq('id', registrant.id).select().single();
+    setClosing(false);
+    if (error) { alert('Failed: ' + error.message); return; }
+    setShowCloseForm(false);
+    onUpdated(data);
+  };
+
+  const eligibilityDocsChecked = ELIGIBILITY_DOCS_LIST.filter(([k]) => registrant.eligibility_docs?.[k]).map(([,l]) => l);
+  const supportNeeds = [
+    ['support_childcare','Childcare'],['support_transportation','Transportation'],['support_tutoring','Tutoring'],
+    ['support_mental_health','Mental health support'],['support_tech_access','Technology access']
+  ].filter(([k]) => registrant[k]).map(([,l]) => l);
+
+  return (
+    <>
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(15,22,49,0.6)', backdropFilter: 'blur(6px)' }}>
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-[92vh] overflow-hidden flex flex-col">
+        <div className="p-5 border-b flex items-center justify-between flex-shrink-0" style={{ borderColor: 'var(--gic-line)' }}>
+          <div>
+            <div className="eyebrow mb-1">Application · {registrant.status}</div>
+            <div className="font-display text-xl font-semibold">{registrant.full_name}</div>
+          </div>
+          <button onClick={onClose} className="btn-ghost"><X size={18}/></button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto grid lg:grid-cols-[1fr_340px]">
+          {/* Application detail */}
+          <div className="p-6 border-r" style={{ borderColor: 'var(--gic-line)' }}>
+            <RegSection title="Personal">
+              <RegRow label="Full name" value={registrant.full_name} />
+              <RegRow label="Date of birth" value={registrant.dob} />
+              <RegRow label="Email" value={registrant.email} />
+              <RegRow label="Phone" value={registrant.phone} />
+              <RegRow label="Address" value={[registrant.address, registrant.city, registrant.state, registrant.zip].filter(Boolean).join(', ')} />
+              <RegRow label="County" value={registrant.county} />
+              <RegRow label="Emergency contact" value={registrant.emergency_contact_name} />
+              <RegRow label="Emergency contact phone" value={registrant.emergency_contact_phone} />
+            </RegSection>
+
+            <RegSection title="Eligibility">
+              <RegRow label="16 years or older" value={registrant.age_16_plus} />
+              <RegRow label="Eligible to work in the U.S." value={registrant.work_eligible_us} />
+              <RegRow label="Can attend training + work hours" value={registrant.can_attend_training} />
+              <RegRow label="Reliable transportation" value={registrant.reliable_transportation} />
+              <RegRow label="Willing to complete OJT hours" value={registrant.willing_ojt} />
+            </RegSection>
+
+            <RegSection title="Education">
+              <RegRow label="Highest level completed" value={registrant.education_level} />
+              <RegRow label="School" value={registrant.school_name} />
+              <RegRow label="Graduation year" value={registrant.graduation_year} />
+              <RegRow label="Other" value={registrant.education_other} />
+            </RegSection>
+
+            <RegSection title="Wealth planning experience">
+              <RegRow label="Years of experience" value={registrant.experience_years} />
+              <RegRow label="Experience level" value={registrant.experience_level} />
+              <RegRow label="Explanation" value={registrant.experience_explain} />
+              <RegRow label="Budgeting" value={registrant.exp_budgeting} />
+              <RegRow label="Credit repair / building" value={registrant.exp_credit} />
+              <RegRow label="Debt management" value={registrant.exp_debt} />
+              <RegRow label="Banking / investment institutions" value={registrant.exp_banking} />
+              <RegRow label="Customer service / client interaction" value={registrant.exp_customer_service} />
+            </RegSection>
+
+            <RegSection title="Employment history">
+              <RegRow label="Current employer" value={registrant.current_employer} />
+              <RegRow label="Current position" value={registrant.current_position} />
+              <RegRow label="Current dates" value={registrant.current_employment_dates} />
+              <RegRow label="Previous employer" value={registrant.previous_employer} />
+              <RegRow label="Previous position" value={registrant.previous_position} />
+              <RegRow label="Previous dates" value={registrant.previous_employment_dates} />
+            </RegSection>
+
+            <RegSection title="Career goals">
+              <RegRow label="Why interested" value={registrant.goal_why} />
+              <RegRow label="Skills hoped to gain" value={registrant.goal_skills} />
+              <RegRow label="Long-term goals" value={registrant.goal_longterm} />
+            </RegSection>
+
+            <RegSection title="Skills self-rating (1–5)">
+              {SKILLS_LIST.map(([key, label]) => (
+                <RegRow key={key} label={label} value={registrant.skills?.[key] ? `${registrant.skills[key]}/5` : null} />
+              ))}
+            </RegSection>
+
+            <RegSection title="Client interaction">
+              <RegRow label="Helped someone with financial decisions" value={registrant.helped_financial_decisions} />
+              <RegRow label="Explanation" value={registrant.helped_financial_decisions_explain} />
+              <RegRow label="Comfortable with diverse communities" value={registrant.comfortable_diverse_communities} />
+              <RegRow label="Comfortable with sensitive topics" value={registrant.comfortable_sensitive_topics} />
+            </RegSection>
+
+            <RegSection title="Training, documents & supportive services">
+              <RegRow label="Workshops/trainings completed" value={registrant.workshops_completed} />
+              <RegRow label="Eligibility documents ready" value={eligibilityDocsChecked} />
+              <RegRow label="Supportive services needed" value={supportNeeds} />
+              <RegRow label="Other support needed" value={registrant.support_other} />
+            </RegSection>
+
+            <RegSection title="Demographics (optional, DOL reporting)">
+              <RegRow label="Sex" value={registrant.sex} />
+              <RegRow label="Ethnicity" value={registrant.ethnicity} />
+              <RegRow label="Race" value={registrant.race} />
+              <RegRow label="Disability" value={registrant.disability} />
+              <RegRow label="Veteran status" value={registrant.veteran_status} />
+              <RegRow label="Education level (DOL)" value={registrant.education_level_dol} />
+              <RegRow label="Employment status" value={registrant.employment_status} />
+              <RegRow label="Completed pre-apprenticeship program" value={registrant.pre_apprenticeship_program} />
+            </RegSection>
+
+            <RegSection title="Commitment agreement">
+              <RegRow label="Agreed" value={registrant.agreed_to_commitment} />
+              <RegRow label="Signature" value={registrant.signature_name} />
+              <RegRow label="Signed at" value={registrant.signed_at ? new Date(registrant.signed_at).toLocaleString() : null} />
+            </RegSection>
+          </div>
+
+          {/* Admin action panel */}
+          <div className="p-6 space-y-6">
+            <div>
+              <label className="eyebrow block mb-2">Sponsor</label>
+              <select className="gic-input mb-2" value={registrant.sponsor_id || ''}
+                onChange={e => saveSponsor(e.target.value)} disabled={registrant.status === 'closed'}>
+                <option value="">— Select sponsor —</option>
+                {sponsors.map(s => (
+                  <option key={s.id} value={s.id}>
+                    {s.name} {s.seats_total != null ? `(${seatCounts[s.id] || 0}/${s.seats_total} seats used)` : ''}
+                  </option>
+                ))}
+              </select>
+              <button onClick={() => setShowSponsorForm(true)} className="btn-ghost text-xs flex items-center gap-1" style={{ color: 'var(--gic-blue)' }}>
+                <Plus size={12}/> Add sponsor
+              </button>
+            </div>
+
+            <div>
+              <label className="eyebrow block mb-2">Sponsor code</label>
+              {tokenText ? (
+                <div className="flex items-center justify-between text-sm p-2.5 rounded-lg border" style={{ borderColor: 'var(--gic-line)' }}>
+                  <code className="font-mono">{tokenText}</code>
+                  <button onClick={copyCode} className="btn-ghost flex items-center gap-1 text-xs">
+                    {copied ? <><Check size={12}/> Copied</> : <><Copy size={12}/> Copy</>}
+                  </button>
+                </div>
+              ) : (
+                <button onClick={() => generateCode()} disabled={!registrant.sponsor_id || generating || registrant.status === 'closed'}
+                  className="btn-secondary w-full flex items-center justify-center gap-2 disabled:opacity-40">
+                  {generating ? <Loader2 size={14} className="animate-spin"/> : <KeySquare size={14}/>}
+                  {generating ? 'Generating…' : 'Generate code'}
+                </button>
+              )}
+            </div>
+
+            <div>
+              <label className="eyebrow block mb-2">Mentor</label>
+              <select className="gic-input" value={mentorId} onChange={e => saveMentor(e.target.value)} disabled={registrant.status === 'closed'}>
+                <option value="">— No mentor assigned —</option>
+                {mentors.map(m => (
+                  <option key={m.id} value={m.id}>{m.full_name || m.email}{m.email === CATHY_EMAIL ? ' (default)' : ''}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="border-t pt-5 space-y-2" style={{ borderColor: 'var(--gic-line)' }}>
+              {registrant.status === 'submitted' && (
+                <>
+                  <button onClick={approve} disabled={!canApprove || approving} className="btn-primary w-full flex items-center justify-center gap-2 disabled:opacity-40">
+                    {approving ? <Loader2 size={14} className="animate-spin"/> : <CheckCircle2 size={14}/>} Approve
+                  </button>
+                  {!canApprove && (
+                    <div className="text-xs" style={{ color: 'var(--gic-warm)' }}>Assign a sponsor, generate a code, and assign a mentor before approving.</div>
+                  )}
+                  {!showCloseForm ? (
+                    <button onClick={() => setShowCloseForm(true)} className="btn-ghost w-full text-sm" style={{ color: 'var(--gic-rose)' }}>Close application</button>
+                  ) : (
+                    <div className="space-y-2 pt-2">
+                      <textarea className="gic-input min-h-[60px] text-sm" placeholder="Reason (optional)" value={closeReason} onChange={e => setCloseReason(e.target.value)} />
+                      <div className="flex gap-2">
+                        <button onClick={doClose} disabled={closing} className="btn-secondary flex-1 text-sm">{closing ? 'Closing…' : 'Confirm close'}</button>
+                        <button onClick={() => setShowCloseForm(false)} className="btn-ghost flex-1 text-sm">Cancel</button>
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+              {registrant.status === 'approved' && (
+                <div className="text-sm p-3 rounded-lg" style={{ background: 'rgba(31,122,74,0.06)', color: 'var(--gic-green)' }}>
+                  Approved {registrant.reviewed_at ? new Date(registrant.reviewed_at).toLocaleDateString() : ''}.
+                  {registrant.activated_profile_id ? ' Account activated.' : ' Awaiting code redemption.'}
+                </div>
+              )}
+              {registrant.status === 'closed' && (
+                <div className="text-sm p-3 rounded-lg" style={{ background: 'rgba(184,61,92,0.06)', color: 'var(--gic-rose)' }}>
+                  Closed{registrant.closed_reason ? `: ${registrant.closed_reason}` : '.'}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    {showSponsorForm && (
+      <SponsorForm onSave={addSponsor} onClose={() => setShowSponsorForm(false)} />
+    )}
+    {seatsExceededSponsor && (
+      <SeatsExceededModal
+        sponsor={seatsExceededSponsor}
+        onAddSeats={addSeatsAndRetry}
+        onChooseDifferent={() => setSeatsExceededSponsor(null)}
+        onCancel={() => setSeatsExceededSponsor(null)}
+      />
+    )}
+    </>
+  );
+}
+
+// ============================================================
+// APPRENTICE PROFILE MODAL — admin read-only view (Analytics "view profile")
+// ============================================================
+function ApprenticeProfileModal({ profileId, onClose }) {
+  const [loading, setLoading] = useState(true);
+  const [profileRow, setProfileRow] = useState(null);
+  const [registrant, setRegistrant] = useState(null);
+  const [progressRows, setProgressRows] = useState([]);
+  const [submissions, setSubmissions] = useState([]);
+  const [loginCount, setLoginCount] = useState(0);
+
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      const [{ data: p }, { data: reg }, { data: prog }, { data: subs }, { count }] = await Promise.all([
+        supabase.from('profiles').select('*').eq('id', profileId).maybeSingle(),
+        supabase.from('registrants').select('*').eq('activated_profile_id', profileId).maybeSingle(),
+        supabase.from('module_progress').select('module_number,status,best_quiz_score,quiz_attempts').eq('user_id', profileId).order('module_number'),
+        supabase.from('competency_submissions').select('id,status,mentor_feedback,submitted_at,ojl_hours_credited').eq('apprentice_id', profileId).order('submitted_at', { ascending: false }),
+        supabase.from('login_events').select('id', { count: 'exact', head: true }).eq('user_id', profileId)
+      ]);
+      if (!mounted) return;
+      setProfileRow(p || null);
+      setRegistrant(reg || null);
+      setProgressRows(prog || []);
+      setSubmissions(subs || []);
+      setLoginCount(count || 0);
+      setLoading(false);
+    })();
+    return () => { mounted = false; };
+  }, [profileId]);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(15,22,49,0.6)', backdropFilter: 'blur(6px)' }}>
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-y-auto">
+        <div className="p-5 border-b flex items-center justify-between sticky top-0 bg-white" style={{ borderColor: 'var(--gic-line)' }}>
+          <div className="font-display text-lg font-semibold">{profileRow?.full_name || 'Apprentice profile'}</div>
+          <button onClick={onClose} className="btn-ghost"><X size={16}/></button>
+        </div>
+        {loading ? (
+          <div className="p-16"><LoadingScreen/></div>
+        ) : (
+          <div className="p-6">
+            <RegSection title="Account">
+              <RegRow label="Email" value={profileRow?.email} />
+              <RegRow label="Enrolled" value={profileRow?.created_at ? new Date(profileRow.created_at).toLocaleDateString() : null} />
+              <RegRow label="Logins" value={loginCount} />
+              <RegRow label="Last active" value={profileRow?.last_active_at ? fmtRelative(profileRow.last_active_at) : null} />
+            </RegSection>
+
+            <RegSection title="Module progress">
+              {progressRows.map(p => (
+                <RegRow key={p.module_number} label={`Module ${p.module_number}`}
+                  value={`${p.status}${p.best_quiz_score ? ` · ${p.best_quiz_score}%` : ''}${p.quiz_attempts ? ` · ${p.quiz_attempts} attempt${p.quiz_attempts === 1 ? '' : 's'}` : ''}`} />
+              ))}
+              {progressRows.length === 0 && <div className="text-sm py-2" style={{ color: 'var(--gic-muted)' }}>No progress yet.</div>}
+            </RegSection>
+
+            <RegSection title="OJL submissions & mentor notes">
+              {submissions.map(s => (
+                <div key={s.id} className="py-2.5 text-sm">
+                  <div className="flex justify-between">
+                    <span style={{ fontWeight: 600 }}>{s.status}</span>
+                    <span style={{ color: 'var(--gic-muted)' }}>{s.submitted_at ? new Date(s.submitted_at).toLocaleDateString() : ''}</span>
+                  </div>
+                  {s.mentor_feedback && <div className="text-xs mt-1" style={{ color: 'var(--gic-muted)' }}>{s.mentor_feedback}</div>}
+                </div>
+              ))}
+              {submissions.length === 0 && <div className="text-sm py-2" style={{ color: 'var(--gic-muted)' }}>No submissions yet.</div>}
+            </RegSection>
+
+            {registrant && (
+              <>
+                <RegSection title="Original application — personal">
+                  <RegRow label="County" value={registrant.county} />
+                  <RegRow label="Date of birth" value={registrant.dob} />
+                  <RegRow label="Address" value={[registrant.address, registrant.city, registrant.state, registrant.zip].filter(Boolean).join(', ')} />
+                  <RegRow label="Emergency contact" value={registrant.emergency_contact_name} />
+                </RegSection>
+                <RegSection title="Original application — career goals">
+                  <RegRow label="Why interested" value={registrant.goal_why} />
+                  <RegRow label="Skills hoped to gain" value={registrant.goal_skills} />
+                  <RegRow label="Long-term goals" value={registrant.goal_longterm} />
+                </RegSection>
+              </>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -5256,6 +6539,12 @@ function App({ profile, signOut }) {
   const [waiverRequestMod, setWaiverRequestMod]     = useState(null); // module user is trying to jump-ahead to
   const { logo: brandLogo, refresh: refreshBranding, setLogo: setBrandLogo } = useBranding(profileData);
 
+  // Record last-active timestamp once per app load (analytics)
+  useEffect(() => {
+    if (!supabase || !profile?.id) return;
+    supabase.from('profiles').update({ last_active_at: new Date().toISOString() }).eq('id', profile.id).then(() => {}, () => {});
+  }, [profile?.id]);
+
   // Load modules
   useEffect(() => {
     if (!supabase) return;
@@ -6075,10 +7364,15 @@ function ForcePasswordChange({ profile, onDone }) {
 // ============================================================
 function AuthGate() {
   const { session, profile, loading, signOut } = useAuth();
+  const [showApply, setShowApply] = useState(false);
 
   if (!SUPABASE_READY) return <SetupNeeded />;
   if (loading)        return <LoadingScreen />;
-  if (!session)       return <LoginScreen />;
+  if (!session) {
+    return showApply
+      ? <ApplicationForm onDone={() => setShowApply(false)} />
+      : <LoginScreen onApply={() => setShowApply(true)} />;
+  }
   if (!profile)       return <LoadingScreen />;
 
   if (profile.metadata?.must_change_password) {
