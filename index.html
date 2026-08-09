@@ -3073,7 +3073,7 @@ function WaiverRequestModal({ module: mod, profile, existingWaiver, onClose, onS
   if (existingWaiver) {
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(15,22,49,0.6)', backdropFilter: 'blur(6px)' }}>
-        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-8 text-center">
+        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-8 text-center max-h-[90vh] overflow-y-auto">
           <div className="w-14 h-14 rounded-full flex items-center justify-center mx-auto mb-4"
             style={{ background: existingWaiver.status === 'approved' ? 'rgba(31,122,74,0.08)' : existingWaiver.status === 'denied' ? 'rgba(184,61,92,0.08)' : 'rgba(200,132,28,0.08)' }}>
             {existingWaiver.status === 'approved' ? <CheckCircle2 size={24} style={{ color: 'var(--gic-green)' }}/> :
@@ -3123,7 +3123,7 @@ function WaiverRequestModal({ module: mod, profile, existingWaiver, onClose, onS
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(15,22,49,0.6)', backdropFilter: 'blur(6px)' }}>
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
         <div className="p-6 border-b flex items-center justify-between" style={{ borderColor: 'var(--gic-line)' }}>
           <div>
             <div className="eyebrow mb-1">Prerequisite Required</div>
@@ -3190,7 +3190,7 @@ function ExamAccessRequestModal({ profile, onClose, onSubmitted }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(15,22,49,0.6)', backdropFilter: 'blur(6px)' }}>
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
         <div className="p-6 border-b flex items-center justify-between" style={{ borderColor: 'var(--gic-line)' }}>
           <div>
             <div className="eyebrow mb-1">Final Exam</div>
@@ -4455,7 +4455,7 @@ function SeatsExceededModal({ sponsor, onAddSeats, onChooseDifferent, onCancel }
   const [extra, setExtra] = useState(5);
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4" style={{ background: 'rgba(15,22,49,0.6)', backdropFilter: 'blur(6px)' }}>
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 max-h-[90vh] overflow-y-auto">
         <AlertTriangle size={28} style={{ color: 'var(--gic-rose)' }} className="mb-3"/>
         <div className="font-display text-lg font-semibold mb-2">No seats available</div>
         <p className="text-sm mb-5" style={{ color: 'var(--gic-muted)' }}>
@@ -5076,7 +5076,7 @@ function SponsorForm({ onSave, onClose }) {
   return (
     <>
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(15,22,49,0.6)', backdropFilter: 'blur(6px)' }}>
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
         <div className="p-5 border-b flex items-center justify-between" style={{ borderColor: 'var(--gic-line)' }}>
           <div className="font-display text-lg font-semibold">New sponsoring organization</div>
           <button onClick={onClose} className="btn-ghost"><X size={16}/></button>
@@ -5163,7 +5163,7 @@ function TokenForm({ sponsor, onSave, onClose }) {
   };
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(15,22,49,0.6)', backdropFilter: 'blur(6px)' }}>
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto">
         <div className="p-5 border-b" style={{ borderColor: 'var(--gic-line)' }}>
           <div className="eyebrow mb-1">{sponsor.name}</div>
           <div className="font-display text-lg font-semibold">Generate enrollment code</div>
@@ -6529,7 +6529,7 @@ function CertificateView({ cert, onClose }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-6" style={{ background: 'rgba(15,22,49,0.8)' }}>
-      <div className="gic-card w-full max-w-lg p-8 text-center animate-fade-in">
+      <div className="gic-card w-full max-w-lg p-8 text-center animate-fade-in max-h-[90vh] overflow-y-auto">
         <div className="w-20 h-20 mx-auto rounded-full flex items-center justify-center mb-4" style={{ background: 'rgba(45,31,177,0.08)', color: 'var(--gic-blue)' }}>
           <Award size={36}/>
         </div>
