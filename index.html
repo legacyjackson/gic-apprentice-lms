@@ -4489,6 +4489,7 @@ function RegistrantReview({ registrant, sponsors, setSponsors, mentors, profile,
   const [generating, setGenerating] = useState(false);
   const [copied, setCopied] = useState(false);
   const [showCloseForm, setShowCloseForm] = useState(false);
+  const [showEmailTemplate, setShowEmailTemplate] = useState(false);
   const [closeReason, setCloseReason] = useState('');
   const [closing, setClosing] = useState(false);
   const [approving, setApproving] = useState(false);
@@ -4742,22 +4743,9 @@ function RegistrantReview({ registrant, sponsors, setSponsors, mentors, profile,
                       {copied ? <><Check size={12}/> Copied</> : <><Copy size={12}/> Copy</>}
                     </button>
                   </div>
-                  <a href={`mailto:${registrant.email}?subject=${encodeURIComponent('Your GIC Apprenticeship enrollment code')}&body=${encodeURIComponent(
-`Hi ${registrant.full_name || ''},
-
-Congratulations — your application to the Wealth Solutions Counselor Apprenticeship Program has been approved${sponsors.find(s => s.id === registrant.sponsor_id)?.name ? ` and sponsored by ${sponsors.find(s => s.id === registrant.sponsor_id)?.name}` : ''}.
-
-To finish setting up your account:
-1. Go to https://gic-apprentice.netlify.app/
-2. Click "Have a sponsorship code?"
-3. Enter this code: ${tokenText}
-4. Enter your email and create a password
-
-Welcome aboard!
-GIC Apprenticeship Team`
-                  )}`} className="btn-secondary w-full flex items-center justify-center gap-2 text-sm">
+                  <button onClick={() => setShowEmailTemplate(true)} className="btn-secondary w-full flex items-center justify-center gap-2 text-sm">
                     <Mail size={14}/> Email applicant their code
-                  </a>
+                  </button>
                 </>
               ) : (
                 <button onClick={() => generateCode()} disabled={!registrant.sponsor_id || generating || registrant.status === 'closed'}
@@ -4828,7 +4816,97 @@ GIC Apprenticeship Team`
         onCancel={() => setSeatsExceededSponsor(null)}
       />
     )}
+    {showEmailTemplate && (
+      <EmailTemplateModal
+        registrant={registrant}
+        tokenText={tokenText}
+        sponsorName={sponsors.find(s => s.id === registrant.sponsor_id)?.name}
+        onClose={() => setShowEmailTemplate(false)}
+      />
+    )}
     </>
+  );
+}
+
+// ============================================================
+// EMAIL TEMPLATE MODAL — editable, copy-to-clipboard activation email
+// ============================================================
+function EmailTemplateModal({ registrant, tokenText, sponsorName, onClose }) {
+  const defaultSubject = 'Your GIC Apprenticeship enrollment code';
+  const defaultBody = `Hi ${registrant.full_name || ''},
+
+Congratulations — your application to the Wealth Solutions Counselor Apprenticeship Program has been approved${sponsorName ? ` and sponsored by ${sponsorName}` : ''}.
+
+To finish setting up your account:
+1. Go to https://gic-apprentice.netlify.app/
+2. Click "Have a sponsorship code?"
+3. Enter this code: ${tokenText || ''}
+4. Enter your email and create a password
+
+Welcome aboard!
+GIC Apprenticeship Team`;
+
+  const [subject, setSubject] = useState(defaultSubject);
+  const [body, setBody] = useState(defaultBody);
+  const [copiedField, setCopiedField] = useState(null);
+
+  const copy = (text, field) => {
+    navigator.clipboard.writeText(text);
+    setCopiedField(field);
+    setTimeout(() => setCopiedField(null), 1500);
+  };
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4" style={{ background: 'rgba(15,22,49,0.6)', backdropFilter: 'blur(6px)' }}>
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+        <div className="p-5 border-b flex items-center justify-between" style={{ borderColor: 'var(--gic-line)' }}>
+          <div>
+            <div className="eyebrow mb-1">Email template</div>
+            <div className="font-display text-lg font-semibold">{registrant.email}</div>
+          </div>
+          <button onClick={onClose} className="btn-ghost"><X size={16}/></button>
+        </div>
+        <div className="p-5 space-y-4">
+          <p className="text-xs" style={{ color: 'var(--gic-muted)' }}>
+            Edit anything below if you'd like, then copy it into your own email client and send.
+          </p>
+
+          <div>
+            <label className="eyebrow block mb-2">To</label>
+            <div className="flex items-center justify-between text-sm p-2.5 rounded-lg border" style={{ borderColor: 'var(--gic-line)' }}>
+              <span>{registrant.email}</span>
+              <button onClick={() => copy(registrant.email, 'to')} className="btn-ghost flex items-center gap-1 text-xs">
+                {copiedField === 'to' ? <><Check size={12}/> Copied</> : <><Copy size={12}/> Copy</>}
+              </button>
+            </div>
+          </div>
+
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <label className="eyebrow">Subject</label>
+              <button onClick={() => copy(subject, 'subject')} className="btn-ghost flex items-center gap-1 text-xs">
+                {copiedField === 'subject' ? <><Check size={12}/> Copied</> : <><Copy size={12}/> Copy</>}
+              </button>
+            </div>
+            <input className="gic-input" value={subject} onChange={e => setSubject(e.target.value)} />
+          </div>
+
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <label className="eyebrow">Message</label>
+              <button onClick={() => copy(body, 'body')} className="btn-ghost flex items-center gap-1 text-xs">
+                {copiedField === 'body' ? <><Check size={12}/> Copied</> : <><Copy size={12}/> Copy</>}
+              </button>
+            </div>
+            <textarea className="gic-input min-h-[260px] font-mono text-xs leading-relaxed" value={body} onChange={e => setBody(e.target.value)} />
+          </div>
+
+          <button onClick={() => copy(`Subject: ${subject}\n\n${body}`, 'all')} className="btn-primary w-full flex items-center justify-center gap-2 text-sm">
+            {copiedField === 'all' ? <><Check size={14}/> Copied subject + message</> : <><Copy size={14}/> Copy subject + message</>}
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 
