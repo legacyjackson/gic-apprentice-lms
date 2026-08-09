@@ -2431,6 +2431,7 @@ function AdminDashboard({ modules, profile, onOpenModule, onApprove, onModuleUpd
   const [mentors, setMentors] = useState([]);
   const [teamLoading, setTeamLoading] = useState(false);
   const [savingMentor, setSavingMentor] = useState({});
+  const [savingSponsor, setSavingSponsor] = useState({});
   const [waivers, setWaivers] = useState([]);
   const [savingWaiver, setSavingWaiver] = useState({});
   const [skipModuleChoice, setSkipModuleChoice] = useState({});
@@ -2456,7 +2457,7 @@ function AdminDashboard({ modules, profile, onOpenModule, onApprove, onModuleUpd
     if (adminTab !== 'team' || !supabase) return;
     setTeamLoading(true);
     Promise.all([
-      supabase.from('profiles').select('id,full_name,email,mentor_id,created_at').eq('role', 'apprentice').order('full_name'),
+      supabase.from('profiles').select('id,full_name,email,mentor_id,employer_sponsor_id,created_at').eq('role', 'apprentice').order('full_name'),
       supabase.from('profiles').select('id,full_name,email').in('role', ['mentor','admin','approver']).order('full_name'),
       supabase.from('registrants').select('id,full_name,email,sponsor_id,mentor_id,reviewed_at').eq('status', 'approved').is('activated_profile_id', null),
       supabase.from('employer_sponsors').select('id,name'),
@@ -2630,6 +2631,17 @@ function AdminDashboard({ modules, profile, onOpenModule, onApprove, onModuleUpd
     await supabase.from('profiles').update({ mentor_id: mentorId || null }).eq('id', apprenticeId);
     setApprentices(prev => prev.map(a => a.id === apprenticeId ? { ...a, mentor_id: mentorId || null } : a));
     setSavingMentor(prev => ({ ...prev, [apprenticeId]: false }));
+  };
+
+  // Lets an admin move an already-active apprentice off a sponsor — the only
+  // way to make a sponsor deletable once it has active apprentices, since
+  // deleteSponsor refuses to run while any are still assigned to it.
+  const assignSponsor = async (apprenticeId, sponsorId) => {
+    setSavingSponsor(prev => ({ ...prev, [apprenticeId]: true }));
+    const { error } = await supabase.from('profiles').update({ employer_sponsor_id: sponsorId || null }).eq('id', apprenticeId);
+    setSavingSponsor(prev => ({ ...prev, [apprenticeId]: false }));
+    if (error) { alert('Failed: ' + error.message); return; }
+    setApprentices(prev => prev.map(a => a.id === apprenticeId ? { ...a, employer_sponsor_id: sponsorId || null } : a));
   };
 
   // Admin override — directly grant an apprentice access to skip ahead to a
@@ -2968,6 +2980,17 @@ function AdminDashboard({ modules, profile, onOpenModule, onApprove, onModuleUpd
                         <div className="text-xs truncate" style={{ color: 'var(--gic-muted)' }}>{a.email}</div>
                       </div>
                       <div className="flex items-center gap-2 flex-shrink-0">
+                        <select
+                          value={a.employer_sponsor_id || ''}
+                          onChange={e => assignSponsor(a.id, e.target.value)}
+                          className="border rounded-lg px-3 py-2 text-sm"
+                          style={{ borderColor: 'var(--gic-line)', minWidth: 160 }}>
+                          <option value="">— No sponsor —</option>
+                          {sponsors.map(s => (
+                            <option key={s.id} value={s.id}>{s.name}</option>
+                          ))}
+                        </select>
+                        {savingSponsor[a.id] && <Loader2 size={14} className="animate-spin" style={{ color: 'var(--gic-blue)' }}/>}
                         <select
                           value={a.mentor_id || ''}
                           onChange={e => assignMentor(a.id, e.target.value)}
@@ -5357,10 +5380,12 @@ function SponsorsAdmin({ profile }) {
       return;
     }
 
-    const activeWarning = activeCount > 0
-      ? ` ${activeCount} already-active apprentice${activeCount === 1 ? '' : 's'} will lose the sponsor label on their profile (their account and access are unaffected).`
-      : '';
-    if (!confirm(`Delete sponsor "${sponsor.name}"? This also removes its enrollment codes.${activeWarning} This cannot be undone.`)) return;
+    if (activeCount > 0) {
+      alert(`Can't delete "${sponsor.name}" — ${activeCount} active apprentice${activeCount === 1 ? ' is' : 's are'} currently assigned to this sponsor.\n\nReassign ${activeCount === 1 ? 'that apprentice' : 'those apprentices'} to a different sponsor first (edit their profile's sponsor), then delete.`);
+      return;
+    }
+
+    if (!confirm(`Delete sponsor "${sponsor.name}"? This also removes its enrollment codes. This cannot be undone.`)) return;
 
     const { error } = await supabase.from('employer_sponsors').delete().eq('id', sponsor.id);
     if (error) { alert('Delete failed: ' + error.message); return; }
