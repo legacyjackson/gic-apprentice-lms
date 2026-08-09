@@ -183,7 +183,12 @@
   .gic-scroll::-webkit-scrollbar-thumb:hover { background: var(--gic-warm); }
 
   /* Animations */
-  @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+  /* No transform here on purpose: a lingering non-"none" transform (even translateY(0)
+     held by animation-fill-mode:both) turns the animated element into the CSS containing
+     block for any position:fixed descendant — which broke every full-screen popup nested
+     inside an .animate-fade-in page section, anchoring them to that section's box instead
+     of the real viewport. Opacity-only keeps the fade without that side effect. */
+  @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
   .animate-fade-in { animation: fadeIn 400ms ease-out both; }
 
   @keyframes pulse-soft { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
@@ -4616,9 +4621,9 @@ function RegistrantReview({ registrant, sponsors, setSponsors, mentors, profile,
           <button onClick={onClose} className="btn-ghost"><X size={18}/></button>
         </div>
 
-        <div className="flex-1 overflow-y-auto grid lg:grid-cols-[1fr_340px]">
-          {/* Application detail */}
-          <div className="p-6 border-r" style={{ borderColor: 'var(--gic-line)' }}>
+        <div className="flex-1 min-h-0 grid lg:grid-cols-[1fr_340px]">
+          {/* Application detail — scrolls independently of the action panel */}
+          <div className="p-6 border-r overflow-y-auto" style={{ borderColor: 'var(--gic-line)' }}>
             <RegSection title="Personal">
               <RegRow label="Full name" value={registrant.full_name} />
               <RegRow label="Date of birth" value={registrant.dob} />
@@ -4709,8 +4714,8 @@ function RegistrantReview({ registrant, sponsors, setSponsors, mentors, profile,
             </RegSection>
           </div>
 
-          {/* Admin action panel */}
-          <div className="p-6 space-y-6">
+          {/* Admin action panel — scrolls independently, stays usable while the left side is read */}
+          <div className="p-6 space-y-6 overflow-y-auto">
             <div>
               <label className="eyebrow block mb-2">Sponsor</label>
               <select className="gic-input mb-2" value={registrant.sponsor_id || ''}
