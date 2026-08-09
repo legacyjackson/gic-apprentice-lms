@@ -4418,10 +4418,26 @@ function regFormatVal(v) {
 }
 
 function RegRow({ label, value }) {
+  const [copied, setCopied] = useState(false);
+  const display = regFormatVal(value);
+  const copyable = display !== '—';
+  const doCopy = () => {
+    navigator.clipboard.writeText(display);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1200);
+  };
   return (
-    <div className="flex justify-between gap-4 py-1.5 text-sm">
+    <div className="flex justify-between items-center gap-3 py-1.5 text-sm">
       <span style={{ color: 'var(--gic-muted)' }}>{label}</span>
-      <span className="text-right">{regFormatVal(value)}</span>
+      <span className="flex items-center gap-2 text-right">
+        <span>{display}</span>
+        {copyable && (
+          <button type="button" onClick={doCopy} title="Copy for RAPIDS" className="flex-shrink-0"
+            style={{ color: copied ? 'var(--gic-green)' : 'var(--gic-muted)' }}>
+            {copied ? <Check size={12}/> : <Copy size={12}/>}
+          </button>
+        )}
+      </span>
     </div>
   );
 }
@@ -4714,12 +4730,30 @@ function RegistrantReview({ registrant, sponsors, setSponsors, mentors, profile,
             <div>
               <label className="eyebrow block mb-2">Sponsor code</label>
               {tokenText ? (
-                <div className="flex items-center justify-between text-sm p-2.5 rounded-lg border" style={{ borderColor: 'var(--gic-line)' }}>
-                  <code className="font-mono">{tokenText}</code>
-                  <button onClick={copyCode} className="btn-ghost flex items-center gap-1 text-xs">
-                    {copied ? <><Check size={12}/> Copied</> : <><Copy size={12}/> Copy</>}
-                  </button>
-                </div>
+                <>
+                  <div className="flex items-center justify-between text-sm p-2.5 rounded-lg border mb-2" style={{ borderColor: 'var(--gic-line)' }}>
+                    <code className="font-mono">{tokenText}</code>
+                    <button onClick={copyCode} className="btn-ghost flex items-center gap-1 text-xs">
+                      {copied ? <><Check size={12}/> Copied</> : <><Copy size={12}/> Copy</>}
+                    </button>
+                  </div>
+                  <a href={`mailto:${registrant.email}?subject=${encodeURIComponent('Your GIC Apprenticeship enrollment code')}&body=${encodeURIComponent(
+`Hi ${registrant.full_name || ''},
+
+Congratulations — your application to the Wealth Solutions Counselor Apprenticeship Program has been approved${sponsors.find(s => s.id === registrant.sponsor_id)?.name ? ` and sponsored by ${sponsors.find(s => s.id === registrant.sponsor_id)?.name}` : ''}.
+
+To finish setting up your account:
+1. Go to https://gic-apprentice.netlify.app/
+2. Click "Have a sponsorship code?"
+3. Enter this code: ${tokenText}
+4. Enter your email and create a password
+
+Welcome aboard!
+GIC Apprenticeship Team`
+                  )}`} className="btn-secondary w-full flex items-center justify-center gap-2 text-sm">
+                    <Mail size={14}/> Email applicant their code
+                  </a>
+                </>
               ) : (
                 <button onClick={() => generateCode()} disabled={!registrant.sponsor_id || generating || registrant.status === 'closed'}
                   className="btn-secondary w-full flex items-center justify-center gap-2 disabled:opacity-40">
