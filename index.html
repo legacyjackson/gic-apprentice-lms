@@ -2679,6 +2679,13 @@ function AdminDashboard({ modules, profile, onOpenModule, onApprove, onModuleUpd
   const draftCount = modules.filter(m => m.status !== 'approved').length;
   const approvedCount = modules.filter(m => m.status === 'approved').length;
 
+  const deleteRegistrant = async (id) => {
+    const { error } = await supabase.from('registrants').delete().eq('id', id);
+    if (error) { alert('Delete failed: ' + error.message); return; }
+    setRegistrants(prev => prev.filter(r => r.id !== id));
+    setReviewingRegistrant(prev => (prev && prev.id === id) ? null : prev);
+  };
+
   const deleteModule = async (id) => {
     const { error } = await supabase.from('modules').delete().eq('id', id);
     if (error) { alert('Delete failed: ' + error.message); return; }
@@ -2820,8 +2827,8 @@ function AdminDashboard({ modules, profile, onOpenModule, onApprove, onModuleUpd
             ) : (
               <div className="gic-card divide-y" style={{ borderColor: 'var(--gic-line)' }}>
                 {registrants.filter(r => registrantFilter === 'all' ? true : r.status === registrantFilter).map(r => (
-                  <button key={r.id} onClick={() => setReviewingRegistrant(r)}
-                    className="w-full text-left p-5 flex items-center gap-4 hover:bg-stone-50 transition-colors">
+                  <div key={r.id} onClick={() => setReviewingRegistrant(r)}
+                    className="w-full text-left p-5 flex items-center gap-4 hover:bg-stone-50 transition-colors cursor-pointer">
                     <div className="w-10 h-10 rounded-full flex items-center justify-center font-semibold text-sm flex-shrink-0"
                       style={{ background: 'rgba(45,31,177,0.08)', color: 'var(--gic-blue)' }}>
                       {(r.full_name || r.email || '?').slice(0,1).toUpperCase()}
@@ -2837,8 +2844,12 @@ function AdminDashboard({ modules, profile, onOpenModule, onApprove, onModuleUpd
                       color:      r.status === 'approved' ? 'var(--gic-green)' : r.status === 'closed' ? 'var(--gic-warm)' : 'var(--gic-blue)',
                       background: r.status === 'approved' ? 'rgba(31,122,74,0.08)' : r.status === 'closed' ? 'rgba(138,116,94,0.08)' : 'rgba(45,31,177,0.06)'
                     }}>{r.status}</span>
+                    <button onClick={(e) => { e.stopPropagation(); if (confirm(`Delete ${r.full_name}'s application? This cannot be undone.`)) deleteRegistrant(r.id); }}
+                      className="btn-ghost flex-shrink-0" title="Delete application" style={{ color: 'var(--gic-rose)' }}>
+                      <Trash2 size={14}/>
+                    </button>
                     <ChevronRight size={16} style={{ color: 'var(--gic-warm)' }} className="flex-shrink-0" />
-                  </button>
+                  </div>
                 ))}
               </div>
             )}
@@ -3135,6 +3146,7 @@ function AdminDashboard({ modules, profile, onOpenModule, onApprove, onModuleUpd
             setRegistrants(prev => prev.map(r => r.id === updated.id ? updated : r));
             setReviewingRegistrant(updated);
           }}
+          onDeleted={deleteRegistrant}
         />
       )}
     </main>
@@ -4615,7 +4627,7 @@ function SeatsExceededModal({ sponsor, onAddSeats, onChooseDifferent, onCancel }
   );
 }
 
-function RegistrantReview({ registrant, sponsors, setSponsors, mentors, profile, onClose, onUpdated }) {
+function RegistrantReview({ registrant, sponsors, setSponsors, mentors, profile, onClose, onUpdated, onDeleted }) {
   const defaultMentorId = registrant.mentor_id || mentors.find(m => m.email === CATHY_EMAIL)?.id || '';
   const [mentorId, setMentorIdState] = useState(defaultMentorId);
   const [tokenText, setTokenText] = useState('');
@@ -4935,6 +4947,12 @@ function RegistrantReview({ registrant, sponsors, setSponsors, mentors, profile,
                   Closed{registrant.closed_reason ? `: ${registrant.closed_reason}` : '.'}
                 </div>
               )}
+              {onDeleted && (
+                <button onClick={() => { if (confirm(`Permanently delete ${registrant.full_name}'s application? This cannot be undone.`)) onDeleted(registrant.id); }}
+                  className="btn-ghost w-full flex items-center justify-center gap-2 text-sm mt-2" style={{ color: 'var(--gic-rose)' }}>
+                  <Trash2 size={13}/> Delete application
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -5228,6 +5246,13 @@ function SponsorsAdmin({ profile }) {
     setTimeout(() => setCopiedId(null), 1500);
   };
 
+  const deleteSponsor = async (sponsor) => {
+    const { error } = await supabase.from('employer_sponsors').delete().eq('id', sponsor.id);
+    if (error) { alert('Delete failed: ' + error.message); return; }
+    setSponsors(prev => prev.filter(s => s.id !== sponsor.id));
+    setTokens(prev => prev.filter(t => t.employer_sponsor_id !== sponsor.id));
+  };
+
   if (loading) return <LoadingScreen/>;
 
   return (
@@ -5265,9 +5290,15 @@ function SponsorsAdmin({ profile }) {
                       </div>
                       {s.address && <div className="text-xs mt-1" style={{ color: 'var(--gic-warm)' }}>{s.address}</div>}
                     </div>
-                    <button onClick={() => setShowTokenForm(s)} className="btn-secondary flex items-center gap-2 text-sm">
-                      <KeySquare size={12}/> Generate code
-                    </button>
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      <button onClick={() => setShowTokenForm(s)} className="btn-secondary flex items-center gap-2 text-sm">
+                        <KeySquare size={12}/> Generate code
+                      </button>
+                      <button onClick={() => { if (confirm(`Delete sponsor "${s.name}"? This also removes its enrollment codes. Apprentices already linked to it keep their record but lose the sponsor reference. This cannot be undone.`)) deleteSponsor(s); }}
+                        className="btn-ghost" title="Delete sponsor" style={{ color: 'var(--gic-rose)' }}>
+                        <Trash2 size={14}/>
+                      </button>
+                    </div>
                   </div>
                   {sponsorTokens.length > 0 && (
                     <div className="space-y-1.5 pt-3 border-t" style={{ borderColor: 'var(--gic-line)' }}>
