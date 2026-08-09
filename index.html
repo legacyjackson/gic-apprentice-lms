@@ -2431,6 +2431,10 @@ function AdminDashboard({ modules, profile, onOpenModule, onApprove, onModuleUpd
   const [mentors, setMentors] = useState([]);
   const [teamLoading, setTeamLoading] = useState(false);
   const [savingMentor, setSavingMentor] = useState({});
+  const [waivers, setWaivers] = useState([]);
+  const [savingWaiver, setSavingWaiver] = useState({});
+  const [skipModuleChoice, setSkipModuleChoice] = useState({});
+  const [deletingUser, setDeletingUser] = useState({});
   const [pendingRegistrants, setPendingRegistrants] = useState([]);
   // Registrants tab
   const [registrants, setRegistrants] = useState([]);
@@ -2455,8 +2459,9 @@ function AdminDashboard({ modules, profile, onOpenModule, onApprove, onModuleUpd
       supabase.from('profiles').select('id,full_name,email,mentor_id,created_at').eq('role', 'apprentice').order('full_name'),
       supabase.from('profiles').select('id,full_name,email').in('role', ['mentor','admin','approver']).order('full_name'),
       supabase.from('registrants').select('id,full_name,email,sponsor_id,mentor_id,reviewed_at').eq('status', 'approved').is('activated_profile_id', null),
-      supabase.from('employer_sponsors').select('id,name')
-    ]).then(([{ data: app }, { data: men }, { data: pending }, { data: sp }]) => {
+      supabase.from('employer_sponsors').select('id,name'),
+      supabase.from('prerequisite_waivers').select('*')
+    ]).then(([{ data: app }, { data: men }, { data: pending }, { data: sp }, { data: wv }]) => {
       setApprentices(app || []);
       // Deduplicate mentors by email — keep the one with a full_name set
       const seen = new Map();
@@ -2467,6 +2472,7 @@ function AdminDashboard({ modules, profile, onOpenModule, onApprove, onModuleUpd
       setMentors(Array.from(seen.values()));
       setPendingRegistrants(pending || []);
       setSponsors(sp || []);
+      setWaivers(wv || []);
       setTeamLoading(false);
     });
   }, [adminTab]);
@@ -2624,6 +2630,55 @@ function AdminDashboard({ modules, profile, onOpenModule, onApprove, onModuleUpd
     await supabase.from('profiles').update({ mentor_id: mentorId || null }).eq('id', apprenticeId);
     setApprentices(prev => prev.map(a => a.id === apprenticeId ? { ...a, mentor_id: mentorId || null } : a));
     setSavingMentor(prev => ({ ...prev, [apprenticeId]: false }));
+  };
+
+  // Admin override — directly grant an apprentice access to skip ahead to a
+  // module, reusing the same prerequisite_waivers row a mentor-approved
+  // jump-ahead request would create, so the existing unlock logic just works.
+  const grantModuleAccess = async (apprenticeId, moduleId) => {
+    if (!moduleId) return;
+    const key = `${apprenticeId}:${moduleId}`;
+    setSavingWaiver(prev => ({ ...prev, [key]: true }));
+    const { data, error } = await supabase.from('prerequisite_waivers').upsert({
+      apprentice_id: apprenticeId,
+      module_id: moduleId,
+      reason: 'Granted directly by admin',
+      status: 'approved',
+      reviewed_by: profile.id,
+      reviewed_at: new Date().toISOString()
+    }, { onConflict: 'apprentice_id,module_id' }).select().single();
+    setSavingWaiver(prev => ({ ...prev, [key]: false }));
+    if (error) { alert('Failed: ' + error.message); return; }
+    setWaivers(prev => [...prev.filter(w => !(w.apprentice_id === apprenticeId && w.module_id === moduleId)), data]);
+    setSkipModuleChoice(prev => ({ ...prev, [apprenticeId]: '' }));
+  };
+
+  const revokeModuleAccess = async (waiver) => {
+    const { error } = await supabase.from('prerequisite_waivers').delete().eq('id', waiver.id);
+    if (error) { alert('Failed: ' + error.message); return; }
+    setWaivers(prev => prev.filter(w => w.id !== waiver.id));
+  };
+
+  const deleteApprentice = async (a) => {
+    if (!confirm(`Permanently delete ${a.full_name || a.email}'s account? This removes their login, progress, submissions, and Q&A history. Their original application stays on file. This cannot be undone.`)) return;
+    setDeletingUser(prev => ({ ...prev, [a.id]: true }));
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch('/.netlify/functions/delete-user', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(session?.access_token ? { 'Authorization': 'Bearer ' + session.access_token } : {})
+        },
+        body: JSON.stringify({ userId: a.id })
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || 'Delete failed');
+      setApprentices(prev => prev.filter(x => x.id !== a.id));
+    } catch (e) {
+      alert('Delete failed: ' + e.message);
+    }
+    setDeletingUser(prev => ({ ...prev, [a.id]: false }));
   };
 
   const exportCSV = async () => {
@@ -2898,31 +2953,70 @@ function AdminDashboard({ modules, profile, onOpenModule, onApprove, onModuleUpd
               </div>
             ) : (
               <div className="gic-card divide-y" style={{ borderColor: 'var(--gic-line)' }}>
-                {apprentices.map(a => (
-                  <div key={a.id} className="p-5 flex items-center gap-4">
-                    <div className="w-10 h-10 rounded-full flex items-center justify-center font-semibold text-sm flex-shrink-0"
-                      style={{ background: 'rgba(45,31,177,0.08)', color: 'var(--gic-blue)' }}>
-                      {(a.full_name || a.email || '?').slice(0,1).toUpperCase()}
+                {apprentices.map(a => {
+                  const approvedModules = modules.filter(m => m.status === 'approved').sort((x,y) => x.module_number - y.module_number);
+                  const grants = waivers.filter(w => w.apprentice_id === a.id && w.status === 'approved');
+                  return (
+                  <div key={a.id} className="p-5">
+                    <div className="flex items-center gap-4">
+                      <div className="w-10 h-10 rounded-full flex items-center justify-center font-semibold text-sm flex-shrink-0"
+                        style={{ background: 'rgba(45,31,177,0.08)', color: 'var(--gic-blue)' }}>
+                        {(a.full_name || a.email || '?').slice(0,1).toUpperCase()}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="font-medium truncate">{a.full_name || a.email}</div>
+                        <div className="text-xs truncate" style={{ color: 'var(--gic-muted)' }}>{a.email}</div>
+                      </div>
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        <select
+                          value={a.mentor_id || ''}
+                          onChange={e => assignMentor(a.id, e.target.value)}
+                          className="border rounded-lg px-3 py-2 text-sm"
+                          style={{ borderColor: 'var(--gic-line)', minWidth: 180 }}>
+                          <option value="">— No mentor assigned —</option>
+                          {mentors.map(m => (
+                            <option key={m.id} value={m.id}>{m.full_name || m.email}</option>
+                          ))}
+                        </select>
+                        {savingMentor[a.id] && <Loader2 size={14} className="animate-spin" style={{ color: 'var(--gic-blue)' }}/>}
+                        <button onClick={() => deleteApprentice(a)} disabled={deletingUser[a.id]}
+                          className="btn-ghost" title="Delete apprentice" style={{ color: 'var(--gic-rose)' }}>
+                          {deletingUser[a.id] ? <Loader2 size={14} className="animate-spin"/> : <Trash2 size={14}/>}
+                        </button>
+                      </div>
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="font-medium truncate">{a.full_name || a.email}</div>
-                      <div className="text-xs truncate" style={{ color: 'var(--gic-muted)' }}>{a.email}</div>
-                    </div>
-                    <div className="flex items-center gap-2 flex-shrink-0">
+
+                    <div className="flex items-center gap-2 mt-3 pl-14 flex-wrap">
+                      <span className="text-xs flex-shrink-0" style={{ color: 'var(--gic-muted)' }}>Skip to module:</span>
                       <select
-                        value={a.mentor_id || ''}
-                        onChange={e => assignMentor(a.id, e.target.value)}
-                        className="border rounded-lg px-3 py-2 text-sm"
-                        style={{ borderColor: 'var(--gic-line)', minWidth: 180 }}>
-                        <option value="">— No mentor assigned —</option>
-                        {mentors.map(m => (
-                          <option key={m.id} value={m.id}>{m.full_name || m.email}</option>
+                        value={skipModuleChoice[a.id] || ''}
+                        onChange={e => setSkipModuleChoice(prev => ({ ...prev, [a.id]: e.target.value }))}
+                        className="border rounded-lg px-2 py-1.5 text-xs"
+                        style={{ borderColor: 'var(--gic-line)', minWidth: 160 }}>
+                        <option value="">— Select module —</option>
+                        {approvedModules.map(m => (
+                          <option key={m.id} value={m.id}>{String(m.module_number).padStart(2,'0')} — {m.title}</option>
                         ))}
                       </select>
-                      {savingMentor[a.id] && <Loader2 size={14} className="animate-spin" style={{ color: 'var(--gic-blue)' }}/>}
+                      <button onClick={() => grantModuleAccess(a.id, skipModuleChoice[a.id])}
+                        disabled={!skipModuleChoice[a.id] || savingWaiver[`${a.id}:${skipModuleChoice[a.id]}`]}
+                        className="btn-ghost text-xs flex items-center gap-1 disabled:opacity-40" style={{ color: 'var(--gic-blue)' }}>
+                        {savingWaiver[`${a.id}:${skipModuleChoice[a.id]}`] ? <Loader2 size={11} className="animate-spin"/> : <UserCheck size={11}/>}
+                        Grant access
+                      </button>
+                      {grants.map(w => {
+                        const mod = modules.find(m => m.id === w.module_id);
+                        return (
+                          <span key={w.id} className="badge flex items-center gap-1.5" style={{ color: 'var(--gic-green)', background: 'rgba(31,122,74,0.08)' }}>
+                            {mod ? `Module ${mod.module_number}` : 'Module'} unlocked
+                            <button onClick={() => revokeModuleAccess(w)} title="Revoke" className="flex items-center"><X size={10}/></button>
+                          </span>
+                        );
+                      })}
                     </div>
                   </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
