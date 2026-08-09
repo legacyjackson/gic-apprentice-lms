@@ -2381,6 +2381,8 @@ function QuizRunner({ mod, quiz, profile, onClose, onComplete }) {
 // ============================================================
 // ADMIN DASHBOARD
 // ============================================================
+const ANALYTICS_EXPORT_FIELDS = ['Name','Email','County','Age','Sponsor','Mentor','Registered','Progress %','Modules Completed','Modules In Progress','Quiz Avg %','Quiz Attempts','OJL Hours','Logins','Last Active','Lesson Time (min)'];
+
 function AdminDashboard({ modules, profile, onOpenModule, onApprove, onModuleUpdated, onModuleDeleted }) {
   const isApprover = profile?.role === 'approver';
   const isAdmin = profile?.role === 'admin';
@@ -2410,6 +2412,8 @@ function AdminDashboard({ modules, profile, onOpenModule, onApprove, onModuleUpd
   const [analyticsFilters, setAnalyticsFilters] = useState({ county: '', sponsorId: '', ageMin: '', ageMax: '', progressMin: '', progressMax: '' });
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [viewingApprenticeProfile, setViewingApprenticeProfile] = useState(null);
+  const [exportFields, setExportFields] = useState(new Set(ANALYTICS_EXPORT_FIELDS));
+  const [showFieldPicker, setShowFieldPicker] = useState(false);
 
   useEffect(() => {
     if (adminTab !== 'team' || !supabase) return;
@@ -2475,12 +2479,12 @@ function AdminDashboard({ modules, profile, onOpenModule, onApprove, onModuleUpd
     (async () => {
       const [{ data: app }, { data: regs }, { data: prog }, { data: subs }, { data: logins }, { data: reads }, { data: sp }, { data: men }] = await Promise.all([
         supabase.from('profiles').select('id,full_name,email,created_at,employer_sponsor_id,mentor_id,last_active_at').eq('role', 'apprentice'),
-        supabase.from('registrants').select('activated_profile_id,dob,county').not('activated_profile_id', 'is', null),
+        supabase.from('registrants').select('status,sponsor_id,sponsor_token_id,activated_profile_id,dob,county,created_at'),
         supabase.from('module_progress').select('user_id,status,best_quiz_score,quiz_attempts,updated_at'),
         supabase.from('competency_submissions').select('apprentice_id,status,ojl_hours_credited'),
         supabase.from('login_events').select('user_id,logged_in_at'),
         supabase.from('lesson_reads').select('user_id,seconds_spent'),
-        supabase.from('employer_sponsors').select('id,name'),
+        supabase.from('employer_sponsors').select('id,name,seats_total'),
         mentors.length ? Promise.resolve({ data: mentors }) : supabase.from('profiles').select('id,full_name,email').in('role', ['mentor','admin','approver']).order('full_name')
       ]);
 
@@ -2497,6 +2501,30 @@ function AdminDashboard({ modules, profile, onOpenModule, onApprove, onModuleUpd
       const sponsorNameById = {}; (sp || []).forEach(s => { sponsorNameById[s.id] = s.name; });
       const regByProfile = {}; (regs || []).forEach(r => { if (r.activated_profile_id) regByProfile[r.activated_profile_id] = r; });
 
+      // Dashboard overview — applicant pipeline, sponsor seat usage, mentor caseload
+      const pipeline = { submitted: 0, approved: 0, closed: 0, total: (regs || []).length };
+      (regs || []).forEach(r => { if (pipeline[r.status] !== undefined) pipeline[r.status]++; });
+
+      const seatsUsedBySponsor = {};
+      (regs || []).forEach(r => {
+        if (r.sponsor_id && r.sponsor_token_id && r.status !== 'closed') {
+          seatsUsedBySponsor[r.sponsor_id] = (seatsUsedBySponsor[r.sponsor_id] || 0) + 1;
+        }
+      });
+      const sponsorSummary = (sp || []).map(s => ({
+        id: s.id, name: s.name, seatsTotal: s.seats_total, seatsUsed: seatsUsedBySponsor[s.id] || 0
+      }));
+
+      const mentorLoad = {};
+      (app || []).forEach(a => {
+        if (!a.mentor_id) return;
+        mentorLoad[a.mentor_id] = (mentorLoad[a.mentor_id] || 0) + 1;
+      });
+      const mentorSummary = mentorList
+        .filter(m => mentorLoad[m.id])
+        .map(m => ({ id: m.id, name: m.full_name || m.email, count: mentorLoad[m.id] }))
+        .sort((a, b) => b.count - a.count);
+
       const approvedCount = modules.filter(m => m.status === 'approved').length;
       const byUser = {};
       (app || []).forEach(a => {
@@ -2505,6 +2533,7 @@ function AdminDashboard({ modules, profile, onOpenModule, onApprove, onModuleUpd
           ...a, completed: 0, inProgress: 0, scores: [], quizAttempts: 0, ojlHours: 0,
           lastActive: a.last_active_at || null, loginCount: 0, secondsSpent: 0,
           county: reg?.county || null, dob: reg?.dob || null,
+          registeredAt: reg?.created_at || a.created_at,
           sponsorName: a.employer_sponsor_id ? (sponsorNameById[a.employer_sponsor_id] || null) : null,
           mentorName: a.mentor_id ? (mentorNameById[a.mentor_id] || null) : null,
         };
@@ -2529,7 +2558,7 @@ function AdminDashboard({ modules, profile, onOpenModule, onApprove, onModuleUpd
         const u = byUser[r.user_id]; if (u) u.secondsSpent += (r.seconds_spent || 0);
       });
 
-      setAnalytics({ rows: Object.values(byUser), approvedModules: approvedCount });
+      setAnalytics({ rows: Object.values(byUser), approvedModules: approvedCount, pipeline, sponsorSummary, mentorSummary });
       setAnalyticsLoading(false);
     })();
   }, [adminTab, modules]);
@@ -2592,13 +2621,14 @@ function AdminDashboard({ modules, profile, onOpenModule, onApprove, onModuleUpd
     setExporting(true);
     try {
       const { data: { session } } = await supabase.auth.getSession();
+      const fields = exportFields.size < ANALYTICS_EXPORT_FIELDS.length ? Array.from(exportFields) : null;
       const res = await fetch('/.netlify/functions/export-registrants-analytics', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           ...(session?.access_token ? { 'Authorization': 'Bearer ' + session.access_token } : {})
         },
-        body: JSON.stringify({ userIds })
+        body: JSON.stringify({ userIds, fields })
       });
       if (!res.ok) throw new Error('Export failed: ' + res.status);
       const blob = await res.blob();
@@ -2866,10 +2896,82 @@ function AdminDashboard({ modules, profile, onOpenModule, onApprove, onModuleUpd
                 <button onClick={exportCSV} disabled={exporting} className="btn-secondary flex items-center gap-2 text-sm">
                   <Download size={13}/>{exporting ? 'Exporting…' : 'Export RAPIDS CSV'}
                 </button>
-                <button onClick={() => exportAnalyticsCSV(selectedIds.size ? Array.from(selectedIds) : analyticsFiltered.map(r => r.id))} disabled={exporting}
+                <button onClick={() => setShowFieldPicker(v => !v)} className="btn-ghost flex items-center gap-1.5 text-sm">
+                  <ListChecks size={13}/> Fields ({exportFields.size}/{ANALYTICS_EXPORT_FIELDS.length})
+                </button>
+                <button onClick={() => exportAnalyticsCSV(selectedIds.size ? Array.from(selectedIds) : analyticsFiltered.map(r => r.id))} disabled={exporting || exportFields.size === 0}
                   className="btn-primary flex items-center gap-2 text-sm">
                   <Download size={13}/>{selectedIds.size ? `Export selected (${selectedIds.size})` : 'Export filtered'}
                 </button>
+              </div>
+            </div>
+
+            {showFieldPicker && (
+              <div className="gic-card p-4 mb-6">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="eyebrow">Which fields to include in the export</div>
+                  <div className="flex gap-3">
+                    <button onClick={() => setExportFields(new Set(ANALYTICS_EXPORT_FIELDS))} className="btn-ghost text-xs">Select all</button>
+                    <button onClick={() => setExportFields(new Set())} className="btn-ghost text-xs">Select none</button>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                  {ANALYTICS_EXPORT_FIELDS.map(f => (
+                    <label key={f} className="flex items-center gap-2 text-sm">
+                      <input type="checkbox" checked={exportFields.has(f)} onChange={() => setExportFields(prev => {
+                        const next = new Set(prev);
+                        next.has(f) ? next.delete(f) : next.add(f);
+                        return next;
+                      })} />
+                      {f}
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Dashboard — full-picture overview: applicants, sponsors, mentors, apprentices */}
+            <div className="mb-8">
+              <div className="font-display text-lg font-semibold mb-4">Program dashboard</div>
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-px mb-4 border" style={{ borderColor: 'var(--gic-line)', background: 'var(--gic-line)' }}>
+                <Stat label="Applicants (total)" value={analytics.pipeline.total} />
+                <Stat label="Submitted — awaiting review" value={analytics.pipeline.submitted} />
+                <Stat label="Approved" value={analytics.pipeline.approved} />
+                <Stat label="Closed" value={analytics.pipeline.closed} />
+              </div>
+              <div className="grid lg:grid-cols-2 gap-4">
+                <div className="gic-card p-4">
+                  <div className="eyebrow mb-3">Sponsors &amp; seats</div>
+                  {analytics.sponsorSummary.length === 0 ? (
+                    <div className="text-sm py-2" style={{ color: 'var(--gic-muted)' }}>No sponsors yet.</div>
+                  ) : (
+                    <div className="space-y-2">
+                      {analytics.sponsorSummary.map(s => (
+                        <div key={s.id} className="flex items-center justify-between text-sm">
+                          <span className="truncate">{s.name}</span>
+                          <span style={{ color: 'var(--gic-muted)' }}>
+                            {s.seatsTotal != null ? `${s.seatsUsed}/${s.seatsTotal} seats` : `${s.seatsUsed} seats used · unlimited`}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <div className="gic-card p-4">
+                  <div className="eyebrow mb-3">Mentor caseload</div>
+                  {analytics.mentorSummary.length === 0 ? (
+                    <div className="text-sm py-2" style={{ color: 'var(--gic-muted)' }}>No mentors assigned yet.</div>
+                  ) : (
+                    <div className="space-y-2">
+                      {analytics.mentorSummary.map(m => (
+                        <div key={m.id} className="flex items-center justify-between text-sm">
+                          <span className="truncate">{m.name}</span>
+                          <span style={{ color: 'var(--gic-muted)' }}>{m.count} apprentice{m.count === 1 ? '' : 's'}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
 
@@ -2960,6 +3062,7 @@ function AdminDashboard({ modules, profile, onOpenModule, onApprove, onModuleUpd
                       <div className="col-span-2 text-right text-xs" style={{ color: 'var(--gic-warm)' }}>{r.lastActive ? fmtRelative(r.lastActive) : 'Never'}</div>
                     </div>
                     <div className="flex items-center gap-4 mt-2 pl-[calc(8.33%+0px)] text-xs" style={{ color: 'var(--gic-muted)' }}>
+                      <span>Registered: {r.registeredAt ? new Date(r.registeredAt).toLocaleDateString() : '—'}</span>
                       <span>Quiz attempts: {r.quizAttempts}</span>
                       <span>OJL hours: {r.ojlHours || 0}h</span>
                       <span>Time on lessons: {r.secondsSpent >= 60 ? Math.round(r.secondsSpent / 60) + ' min' : (r.secondsSpent || 0) + ' sec'}</span>
@@ -4920,16 +5023,19 @@ function ApprenticeProfileModal({ profileId, onClose }) {
   const [progressRows, setProgressRows] = useState([]);
   const [submissions, setSubmissions] = useState([]);
   const [loginCount, setLoginCount] = useState(0);
+  const [lessonTimes, setLessonTimes] = useState([]);
 
   useEffect(() => {
     let mounted = true;
     (async () => {
-      const [{ data: p }, { data: reg }, { data: prog }, { data: subs }, { count }] = await Promise.all([
+      const [{ data: p }, { data: reg }, { data: prog }, { data: subs }, { count }, { data: reads }, { data: mods }] = await Promise.all([
         supabase.from('profiles').select('*').eq('id', profileId).maybeSingle(),
         supabase.from('registrants').select('*').eq('activated_profile_id', profileId).maybeSingle(),
         supabase.from('module_progress').select('module_number,status,best_quiz_score,quiz_attempts').eq('user_id', profileId).order('module_number'),
         supabase.from('competency_submissions').select('id,status,mentor_feedback,submitted_at,ojl_hours_credited').eq('apprentice_id', profileId).order('submitted_at', { ascending: false }),
-        supabase.from('login_events').select('id', { count: 'exact', head: true }).eq('user_id', profileId)
+        supabase.from('login_events').select('id', { count: 'exact', head: true }).eq('user_id', profileId),
+        supabase.from('lesson_reads').select('module_id,lesson_index,seconds_spent').eq('user_id', profileId).gt('seconds_spent', 0),
+        supabase.from('modules').select('id,module_number,title,content')
       ]);
       if (!mounted) return;
       setProfileRow(p || null);
@@ -4937,6 +5043,21 @@ function ApprenticeProfileModal({ profileId, onClose }) {
       setProgressRows(prog || []);
       setSubmissions(subs || []);
       setLoginCount(count || 0);
+
+      const modById = {}; (mods || []).forEach(m => { modById[m.id] = m; });
+      const times = (reads || []).map(r => {
+        const mod = modById[r.module_id];
+        const lessonTitle = mod?.content?.lessons?.[r.lesson_index]?.title || `Lesson ${r.lesson_index + 1}`;
+        return {
+          key: `${r.module_id}-${r.lesson_index}`,
+          moduleLabel: mod ? `Module ${mod.module_number} — ${mod.title}` : 'Unknown module',
+          lessonTitle,
+          moduleNumber: mod?.module_number ?? 999,
+          lessonIndex: r.lesson_index,
+          seconds: r.seconds_spent
+        };
+      }).sort((a, b) => a.moduleNumber - b.moduleNumber || a.lessonIndex - b.lessonIndex);
+      setLessonTimes(times);
       setLoading(false);
     })();
     return () => { mounted = false; };
@@ -4966,6 +5087,14 @@ function ApprenticeProfileModal({ profileId, onClose }) {
                   value={`${p.status}${p.best_quiz_score ? ` · ${p.best_quiz_score}%` : ''}${p.quiz_attempts ? ` · ${p.quiz_attempts} attempt${p.quiz_attempts === 1 ? '' : 's'}` : ''}`} />
               ))}
               {progressRows.length === 0 && <div className="text-sm py-2" style={{ color: 'var(--gic-muted)' }}>No progress yet.</div>}
+            </RegSection>
+
+            <RegSection title="Time spent per lesson">
+              {lessonTimes.map(t => (
+                <RegRow key={t.key} label={`${t.moduleLabel} — ${t.lessonTitle}`}
+                  value={t.seconds >= 60 ? `${Math.round(t.seconds / 60)} min` : `${t.seconds} sec`} />
+              ))}
+              {lessonTimes.length === 0 && <div className="text-sm py-2" style={{ color: 'var(--gic-muted)' }}>No lesson activity yet.</div>}
             </RegSection>
 
             <RegSection title="OJL submissions & mentor notes">

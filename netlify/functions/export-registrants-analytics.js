@@ -1,7 +1,9 @@
 // ============================================================================
 // export-registrants-analytics.js — filtered/selected analytics CSV export
 // Auth: admin or approver role required.
-// Body: { userIds: string[] }  — apprentice profile ids to include.
+// Body: { userIds: string[], fields?: string[] }
+//   userIds — apprentice profile ids to include.
+//   fields  — subset of ALL_HEADERS to include as columns; omit/empty = all.
 // ============================================================================
 
 const { createClient } = require('@supabase/supabase-js');
@@ -56,6 +58,7 @@ exports.handler = async (event) => {
   catch { return err(400, 'Invalid JSON'); }
 
   const userIds = Array.isArray(body.userIds) && body.userIds.length ? body.userIds : null;
+  const requestedFields = Array.isArray(body.fields) && body.fields.length ? body.fields : null;
 
   let profileQuery = admin.from('profiles')
     .select('id,full_name,email,created_at,employer_sponsor_id,mentor_id,last_active_at')
@@ -67,7 +70,7 @@ exports.handler = async (event) => {
 
   const [{ data: modules }, { data: regs }, { data: prog }, { data: subs }, { data: logins }, { data: reads }, { data: sponsors }, { data: mentors }] = await Promise.all([
     admin.from('modules').select('status'),
-    admin.from('registrants').select('activated_profile_id,dob,county').in('activated_profile_id', ids.length ? ids : ['00000000-0000-0000-0000-000000000000']),
+    admin.from('registrants').select('activated_profile_id,dob,county,created_at').in('activated_profile_id', ids.length ? ids : ['00000000-0000-0000-0000-000000000000']),
     admin.from('module_progress').select('user_id,status,best_quiz_score,quiz_attempts').in('user_id', ids.length ? ids : ['00000000-0000-0000-0000-000000000000']),
     admin.from('competency_submissions').select('apprentice_id,status,ojl_hours_credited').in('apprentice_id', ids.length ? ids : ['00000000-0000-0000-0000-000000000000']),
     admin.from('login_events').select('user_id').in('user_id', ids.length ? ids : ['00000000-0000-0000-0000-000000000000']),
@@ -86,7 +89,8 @@ exports.handler = async (event) => {
     const reg = regByProfile[p.id];
     byUser[p.id] = {
       ...p, completed: 0, inProgress: 0, scores: [], quizAttempts: 0, ojlHours: 0,
-      loginCount: 0, secondsSpent: 0, county: reg?.county || '', dob: reg?.dob || ''
+      loginCount: 0, secondsSpent: 0, county: reg?.county || '', dob: reg?.dob || '',
+      registeredAt: reg?.created_at || p.created_at
     };
   });
   (prog || []).forEach(p => {
@@ -107,7 +111,7 @@ exports.handler = async (event) => {
     'Age':                ageFromDob(u.dob),
     'Sponsor':            u.employer_sponsor_id ? (sponsorNameById[u.employer_sponsor_id] || '') : '',
     'Mentor':             u.mentor_id ? (mentorNameById[u.mentor_id] || '') : '',
-    'Registered':         u.created_at ? u.created_at.slice(0, 10) : '',
+    'Registered':         u.registeredAt ? u.registeredAt.slice(0, 10) : '',
     'Progress %':         approvedModules > 0 ? Math.round((u.completed / approvedModules) * 100) : 0,
     'Modules Completed':  u.completed,
     'Modules In Progress': u.inProgress,
@@ -119,8 +123,9 @@ exports.handler = async (event) => {
     'Lesson Time (min)':  Math.round((u.secondsSpent || 0) / 60),
   }));
 
-  const headers = ['Name','Email','County','Age','Sponsor','Mentor','Registered','Progress %','Modules Completed','Modules In Progress','Quiz Avg %','Quiz Attempts','OJL Hours','Logins','Last Active','Lesson Time (min)'];
-  const csv = toCSV(rows, headers);
+  const ALL_HEADERS = ['Name','Email','County','Age','Sponsor','Mentor','Registered','Progress %','Modules Completed','Modules In Progress','Quiz Avg %','Quiz Attempts','OJL Hours','Logins','Last Active','Lesson Time (min)'];
+  const headers = requestedFields ? ALL_HEADERS.filter(h => requestedFields.includes(h)) : ALL_HEADERS;
+  const csv = toCSV(rows, headers.length ? headers : ALL_HEADERS);
 
   return {
     statusCode: 200,
