@@ -749,7 +749,7 @@ const RACE_OPTIONS = [
   'Native Hawaiian or Other Pacific Islander', 'White'
 ];
 
-function AppField({ def, value, onChange }) {
+function AppField({ def, value, onChange, hint }) {
   const base = "gic-input";
   const label = (
     <label className="eyebrow block mb-2">{def.label}{def.required ? ' *' : ''}</label>
@@ -797,6 +797,7 @@ function AppField({ def, value, onChange }) {
       {label}
       <input type={def.type || 'text'} className={base} value={value ?? ''} placeholder={def.placeholder || ''}
         onChange={e => onChange(e.target.value)} required={def.required} />
+      {hint && <div className="text-xs mt-1">{hint}</div>}
     </div>
   );
 }
@@ -897,6 +898,31 @@ function ApplicationForm({ onDone }) {
     ...f, race: f.race.includes(opt) ? f.race.filter(r => r !== opt) : [...f.race, opt]
   }));
 
+  // Auto-detect county from the address via the free U.S. Census Bureau geocoder.
+  // Never overwrites a county the applicant has typed in themselves.
+  const [countyStatus, setCountyStatus] = useState(''); // '' | 'looking' | 'done' | 'error'
+  const autoCountyRef = useRef('');
+  useEffect(() => {
+    const { address, city, state, zip } = form;
+    if (!city || !state || !zip) return;
+    setCountyStatus('looking');
+    const t = setTimeout(async () => {
+      try {
+        const { county } = await callPublicFn('lookup-county', { address, city, state, zip });
+        if (county) {
+          setForm(f => (f.county === '' || f.county === autoCountyRef.current) ? { ...f, county } : f);
+          autoCountyRef.current = county;
+          setCountyStatus('done');
+        } else {
+          setCountyStatus('error');
+        }
+      } catch {
+        setCountyStatus('error');
+      }
+    }, 800);
+    return () => clearTimeout(t);
+  }, [form.address, form.city, form.state, form.zip]);
+
   const step = APPLICATION_STEPS[stepIdx];
   const isLast = stepIdx === APPLICATION_STEPS.length - 1;
 
@@ -981,7 +1007,14 @@ function ApplicationForm({ onDone }) {
           {step.fields && (
             <div className="grid md:grid-cols-2 gap-5">
               {step.fields.map(f => (
-                <AppField key={f.key} def={f} value={form[f.key]} onChange={v => set(f.key, v)} />
+                <AppField key={f.key} def={f} value={form[f.key]} onChange={v => set(f.key, v)}
+                  hint={f.key === 'county' ? (
+                    countyStatus === 'looking'
+                      ? <span className="flex items-center gap-1" style={{ color: 'var(--gic-muted)' }}><Loader2 size={10} className="animate-spin"/> Detecting county from your address…</span>
+                      : countyStatus === 'done'
+                      ? <span style={{ color: 'var(--gic-green)' }}>Auto-filled from your address — edit if this isn't right.</span>
+                      : null
+                  ) : null} />
               ))}
             </div>
           )}
